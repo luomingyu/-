@@ -1,0 +1,98 @@
+/* ===== 主布局：顶部条 + 左右 5:1 ===== */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+}
+
+/* 顶部条：横跨全宽 */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.top-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* 年月选择器 */
+.month-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.month-selector__select {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s ease;
+  min-width: 80px;
+}
+
+.month-selector__select:hover {
+  border-color: var(--primary);
+}
+
+.month-selector__select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.app-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.5px;
+}
+
+/* 主区：左右分栏 5:1 */
+.main-split {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+}
+
+/* 左侧：日历区 */
+.calendar-zone {
+  flex: 5;
+  min-width: 0;
+  display: flex;
+}
+
+.calendar-container {
+  flex: 1;
+  min-width: 0;
+  background: var(--card);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 右侧：汇总面板 */
+.summary-zone {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 4px;
+}

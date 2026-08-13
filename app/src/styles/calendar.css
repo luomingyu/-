@@ -1,0 +1,248 @@
+/* ===== 日历 ===== */
+.calendar-header {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+  padding: 16px 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.calendar-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+
+.calendar-subtitle {
+  font-size: 14px;
+  opacity: 0.9;
+  font-weight: 400;
+}
+
+.calendar-nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.nav-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+.nav-btn:active {
+  transform: scale(0.95);
+}
+
+.calendar-body {
+  padding: 8px;
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 2px;
+  flex-shrink: 0;
+}
+
+.weekday {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 8px;
+  background: #F1F5F9;
+  border-radius: 6px;
+}
+
+.calendar-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.week-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  flex: 1;
+}
+
+.day-cell {
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #F8FAFC;
+  min-height: 90px;
+  transition: all 0.2s ease;
+}
+
+.day-cell:hover {
+  background: var(--primary-light);
+}
+
+.day-cell.other-month {
+  opacity: 0.3;
+  background: #F1F5F9;
+}
+
+.day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 6px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+  min-height: 28px;
+}
+
+.day-number {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.day-number.today {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.day-number.selected {
+  background: var(--primary);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.day-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--secondary);
+}
+
+.day-courses {
+  flex: 1;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ===== 课程卡片 ===== */
+.course-card {
+  padding: 5px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.course-card:hover {
+  transform: translateX(2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.course-card.math {
+  background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+  border-left: 3px solid #4338CA;
+}
+
+.course-card.english {
+  background: linear-gradient(135deg, #FCE7F3 0%, #FBCFE8 100%);
+  border-left: 3px solid #BE185D;
+}
+
+.course-card.physics {
+  background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+  border-left: 3px solid #065F46;
+}
+
+.course-card.chemistry {
+  background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
+  border-left: 3px solid #92400E;
+}
+
+.course-card.default {
+  background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+  border-left: 3px solid #4338CA;
+}
+
+.course-card.scheduled {
+  background: linear-gradient(135deg, #DBEAFE 0%, #93C5FD 100%);
+  border-left: 3px solid #1D4ED8;
+}
+
+.course-class {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 1px;
+}
+
+.course-name {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 1px;
+}
+
+.course-time {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 1px;
+}
+
+.course-teacher {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* ===== 空闲时间卡片 ===== */
+.availability-card {
+  padding: 5px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
+  border-left: 3px solid #059669;
+}
+
+.availability-time {
+  font-weight: 600;
+  color: #065F46;
+  margin-bottom: 2px;
+}
+
+.availability-teacher {
+  font-size: 11px;
+  color: #047857;
+}

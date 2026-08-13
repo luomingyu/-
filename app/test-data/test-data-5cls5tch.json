@@ -1,0 +1,3363 @@
+{
+  "metadata": {
+    "description": "5师资5班级9月排课测试数据",
+    "generatedAt": "2026-08-12T03:54:51.002Z",
+    "teachers": [
+      "张明",
+      "李华",
+      "陈静",
+      "王强",
+      "赵伟"
+    ],
+    "classes": [
+      "A班",
+      "B班",
+      "C班",
+      "D班",
+      "E班"
+    ],
+    "availabilityCount": 306,
+    "courseCount": 150,
+    "scheduleMonth": "2026-09"
+  },
+  "availabilityData": [
+    {
+      "teacher": "张明",
+      "date": "2026-09-01",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-01",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-01",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-01",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-01",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-01",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-01",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-01",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-01",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-01",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-01",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-01",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-01",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-01",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-02",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-02",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-02",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-02",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-02",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-02",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-02",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-02",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-02",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-02",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-03",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-03",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-03",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-03",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-03",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-03",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-03",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-03",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-03",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-03",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-03",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-03",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-03",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-03",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-04",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-04",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-04",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-04",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-04",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-04",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-04",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-04",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-04",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-04",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-04",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-04",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-04",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-04",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-05",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-05",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-05",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-05",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-05",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-05",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-05",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-05",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-05",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-05",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-05",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-05",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-05",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-05",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-06",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-06",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-06",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-06",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-06",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-06",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-06",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-06",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-06",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-06",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-07",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-07",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-07",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-07",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-08",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-08",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-08",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-08",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-08",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-08",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-08",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-08",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-08",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-08",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-08",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-08",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-08",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-08",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-09",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-09",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-09",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-09",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-09",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-09",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-09",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-09",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-09",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-09",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-10",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-10",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-10",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-10",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-10",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-10",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-10",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-10",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-10",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-10",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-10",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-10",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-10",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-10",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-11",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-11",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-11",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-11",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-11",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-11",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-11",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-11",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-11",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-11",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-11",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-11",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-11",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-11",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-12",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-12",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-12",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-12",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-12",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-12",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-12",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-12",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-12",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-12",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-13",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-13",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-13",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-13",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-13",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-13",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-13",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-13",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-13",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-13",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-14",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-14",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-14",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-14",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-15",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-15",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-15",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-15",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-15",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-15",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-15",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-15",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-15",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-15",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-15",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-15",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-15",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-15",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-16",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-16",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-16",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-16",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-16",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-16",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-16",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-16",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-16",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-16",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-17",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-17",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-17",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-17",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-17",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-17",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-17",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-17",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-17",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-17",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-17",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-17",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-17",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-17",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-18",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-18",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-18",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-18",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-18",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-18",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-18",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-18",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-18",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-18",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-18",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-18",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-18",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-18",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-19",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-19",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-19",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-19",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-19",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-19",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-19",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-19",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-19",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-19",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-20",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-20",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-20",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-20",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-20",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-20",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-20",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-20",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-20",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-20",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-21",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-21",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-21",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-21",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-22",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-22",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-22",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-22",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-22",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-22",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-22",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-22",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-22",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-22",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-22",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-22",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-22",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-22",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-23",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-23",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-23",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-23",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-23",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "张明",
+      "date": "2026-09-23",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-23",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-23",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-23",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-23",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-24",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-24",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-24",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-24",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-24",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-24",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-24",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-24",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-24",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-24",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-24",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-25",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-25",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-25",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-25",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-25",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "李华",
+      "date": "2026-09-25",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-25",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-25",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-25",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-25",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-25",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-26",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-26",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-26",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-26",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-27",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-27",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-27",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-27",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-28",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-28",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-28",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-28",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-29",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-29",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-29",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-29",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-29",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-29",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-29",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-29",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-30",
+      "startTime": "09:00",
+      "endTime": "12:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-30",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-30",
+      "startTime": "14:00",
+      "endTime": "17:00"
+    },
+    {
+      "teacher": "王强",
+      "date": "2026-09-30",
+      "startTime": "18:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-30",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-30",
+      "startTime": "18:00",
+      "endTime": "20:00"
+    },
+    {
+      "teacher": "赵伟",
+      "date": "2026-09-30",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    },
+    {
+      "teacher": "陈静",
+      "date": "2026-09-30",
+      "startTime": "20:00",
+      "endTime": "22:30"
+    }
+  ],
+  "courseSystemData": [
+    {
+      "classType": "A班",
+      "courseName": "A班-高数-第1讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 0
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-高数-第2讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 1
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-高数-第3讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 2
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-高数-第4讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 3
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-高数-第5讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 4
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-高数-第6讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 5
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-英语-第1讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 6
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-英语-第2讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 7
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-英语-第3讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 8
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-英语-第4讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 9
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-英语-第5讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 10
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-英语-第6讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 11
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-物理-第1讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 12
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-物理-第2讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 13
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-物理-第3讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 14
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-物理-第4讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 15
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-物理-第5讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 16
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-物理-第6讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 17
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-化学-第1讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 18
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-化学-第2讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 19
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-化学-第3讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 20
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-化学-第4讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 21
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-化学-第5讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 22
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-化学-第6讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 23
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-线代-第1讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 24
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-线代-第2讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 25
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-线代-第3讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 26
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-线代-第4讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 27
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-线代-第5讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 28
+    },
+    {
+      "classType": "A班",
+      "courseName": "A班-线代-第6讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 0,
+      "sheetName": "A班",
+      "orderInSheet": 29
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-高数-第1讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 0
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-高数-第2讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 1
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-高数-第3讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 2
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-高数-第4讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 3
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-高数-第5讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 4
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-高数-第6讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 5
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-英语-第1讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 6
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-英语-第2讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 7
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-英语-第3讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 8
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-英语-第4讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 9
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-英语-第5讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 10
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-英语-第6讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 11
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-物理-第1讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 12
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-物理-第2讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 13
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-物理-第3讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 14
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-物理-第4讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 15
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-物理-第5讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 16
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-物理-第6讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 17
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-化学-第1讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 18
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-化学-第2讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 19
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-化学-第3讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 20
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-化学-第4讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 21
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-化学-第5讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 22
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-化学-第6讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 23
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-线代-第1讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 24
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-线代-第2讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 25
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-线代-第3讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 26
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-线代-第4讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 27
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-线代-第5讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 28
+    },
+    {
+      "classType": "B班",
+      "courseName": "B班-线代-第6讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 1,
+      "sheetName": "B班",
+      "orderInSheet": 29
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-高数-第1讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 0
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-高数-第2讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 1
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-高数-第3讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 2
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-高数-第4讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 3
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-高数-第5讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 4
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-高数-第6讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 5
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-英语-第1讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 6
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-英语-第2讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 7
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-英语-第3讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 8
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-英语-第4讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 9
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-英语-第5讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 10
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-英语-第6讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 11
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-物理-第1讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 12
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-物理-第2讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 13
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-物理-第3讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 14
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-物理-第4讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 15
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-物理-第5讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 16
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-物理-第6讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 17
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-化学-第1讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 18
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-化学-第2讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 19
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-化学-第3讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 20
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-化学-第4讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 21
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-化学-第5讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 22
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-化学-第6讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 23
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-线代-第1讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 24
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-线代-第2讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 25
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-线代-第3讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 26
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-线代-第4讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 27
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-线代-第5讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 28
+    },
+    {
+      "classType": "C班",
+      "courseName": "C班-线代-第6讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 2,
+      "sheetName": "C班",
+      "orderInSheet": 29
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-高数-第1讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 0
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-高数-第2讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 1
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-高数-第3讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 2
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-高数-第4讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 3
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-高数-第5讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 4
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-高数-第6讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 5
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-英语-第1讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 6
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-英语-第2讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 7
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-英语-第3讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 8
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-英语-第4讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 9
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-英语-第5讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 10
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-英语-第6讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 11
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-物理-第1讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 12
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-物理-第2讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 13
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-物理-第3讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 14
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-物理-第4讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 15
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-物理-第5讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 16
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-物理-第6讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 17
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-化学-第1讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 18
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-化学-第2讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 19
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-化学-第3讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 20
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-化学-第4讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 21
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-化学-第5讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 22
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-化学-第6讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 23
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-线代-第1讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 24
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-线代-第2讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 25
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-线代-第3讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 26
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-线代-第4讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 27
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-线代-第5讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 28
+    },
+    {
+      "classType": "D班",
+      "courseName": "D班-线代-第6讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 3,
+      "sheetName": "D班",
+      "orderInSheet": 29
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-高数-第1讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 0
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-高数-第2讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 1
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-高数-第3讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 2
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-高数-第4讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 3
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-高数-第5讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 4
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-高数-第6讲",
+      "teacher": "张明",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 5
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-英语-第1讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 6
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-英语-第2讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 7
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-英语-第3讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 8
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-英语-第4讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 9
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-英语-第5讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 10
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-英语-第6讲",
+      "teacher": "李华",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 11
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-物理-第1讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 12
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-物理-第2讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 13
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-物理-第3讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 14
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-物理-第4讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 15
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-物理-第5讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 16
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-物理-第6讲",
+      "teacher": "王强",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 17
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-化学-第1讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 18
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-化学-第2讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 19
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-化学-第3讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 20
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-化学-第4讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 21
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-化学-第5讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 22
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-化学-第6讲",
+      "teacher": "赵伟",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 23
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-线代-第1讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 24
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-线代-第2讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 25
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-线代-第3讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 26
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-线代-第4讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 27
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-线代-第5讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 28
+    },
+    {
+      "classType": "E班",
+      "courseName": "E班-线代-第6讲",
+      "teacher": "陈静",
+      "duration": "120",
+      "scheduled": null,
+      "sheetIndex": 4,
+      "sheetName": "E班",
+      "orderInSheet": 29
+    }
+  ]
+}

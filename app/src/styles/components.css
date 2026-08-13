@@ -1,0 +1,446 @@
+/* ===== 上传按钮 / 排课按钮 / 状态 ===== */
+.upload-btn-wrapper {
+  position: relative;
+  display: inline-block;
+  align-self: flex-start;
+}
+
+.upload-btn {
+  padding: 8px 16px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.upload-btn:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
+.upload-btn:active {
+  transform: translateY(0);
+}
+
+#fileInput,
+#courseSystemFileInput {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.upload-status {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+
+.upload-status.success {
+  background: #ECFDF5;
+  color: #065F46;
+}
+
+.upload-status.error {
+  background: #FEF2F2;
+  color: #DC2626;
+}
+
+.upload-status.info {
+  background: #EFF6FF;
+  color: #1D4ED8;
+}
+
+.schedule-btn {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.schedule-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+.schedule-btn:active {
+  transform: translateY(0);
+}
+
+/* ===== 删除按钮 ===== */
+.delete-btn {
+  background: #FEF2F2;
+  color: #DC2626;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.delete-btn:hover {
+  background: #DC2626;
+  color: white;
+}
+
+/* ===== 数据列表区块 ===== */
+.data-list-section {
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.data-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.data-list-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.data-list-count {
+  font-size: 11px;
+  background: var(--primary-light);
+  color: var(--primary);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.data-list-content {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.data-list-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 12px;
+}
+
+.data-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-bottom: 1px solid #F1F5F9;
+  gap: 8px;
+}
+
+.data-list-item:hover {
+  background: #F8FAFC;
+}
+
+.data-list-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.data-list-text {
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.data-list-subtext {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scheduled-list-item {
+  background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+}
+
+.scheduled-list-item .data-list-text {
+  color: #4338CA;
+  font-weight: 500;
+}
+
+.scheduled-class-tag {
+  display: inline-block;
+  background: #6366F1;
+  color: white;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+  font-weight: 400;
+}
+
+/* ===== 树形折叠区块 ===== */
+.tree-section {
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.tree-section__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.tree-section__header:hover {
+  background: #F8FAFC;
+}
+
+.tree-section__toggle {
+  font-size: 10px;
+  color: var(--text-secondary);
+  width: 12px;
+  display: inline-block;
+  text-align: center;
+  transition: transform 0.15s;
+}
+
+.tree-section__title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-section__count {
+  font-size: 11px;
+  background: var(--primary-light);
+  color: var(--primary);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.tree-section__body {
+  padding: 8px 10px 10px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.tree-section.collapsed .tree-section__body {
+  display: none;
+}
+
+.tree-section.collapsed .tree-section__header {
+  border-bottom: none;
+}
+
+.tree-section.collapsed .tree-section__toggle {
+  transform: rotate(-90deg);
+}
+
+/* ===== 文件节点（树形第二层，类似文件夹） ===== */
+.file-node {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  background: var(--card);
+}
+
+.file-node__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  cursor: pointer;
+  user-select: none;
+  background: #F8FAFC;
+  transition: background 0.15s;
+}
+
+.file-node__header:hover {
+  background: var(--primary-light);
+}
+
+.file-node__toggle {
+  font-size: 9px;
+  color: var(--text-secondary);
+  width: 10px;
+  text-align: center;
+  transition: transform 0.15s;
+}
+
+.file-node__icon {
+  font-size: 13px;
+}
+
+.file-node__name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-node__count {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: white;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.file-node__body {
+  padding: 6px 8px 8px 22px;
+}
+
+.file-node.collapsed .file-node__body {
+  display: none;
+}
+
+.file-node.collapsed .file-node__toggle {
+  transform: rotate(-90deg);
+}
+
+/* 文件节点内条目（复用 .data-list-item）紧凑化 */
+.file-node__body .data-list-item {
+  padding: 5px 6px;
+}
+
+.file-node__empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px;
+}
+
+/* ===== 整合区域：上传 + 列表 ===== */
+.integrated-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.integrated-section .tree-section__header {
+  flex-wrap: nowrap;
+}
+
+.section-upload {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.upload-btn--sm {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  gap: 4px;
+}
+
+.upload-hint-bar {
+  padding: 6px 10px;
+  background: #F8FAFC;
+  border-bottom: 1px solid var(--border);
+  margin: -8px -10px 8px;
+}
+
+.upload-hint-bar .upload-status {
+  display: block;
+  padding: 3px 8px;
+  font-size: 11px;
+  text-align: center;
+}
+
+.integrated-section .tree-section__body {
+  padding-top: 0;
+}
+
+.integrated-section .tree-section__count {
+  margin-right: 8px;
+}
+
+/* ===== 导出按钮 ===== */
+.section-export {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.export-btn {
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.export-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+}
+
+.export-btn:active {
+  transform: translateY(0);
+}
+
+.export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}

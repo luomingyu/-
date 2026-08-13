@@ -1,0 +1,1941 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>月度日历</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --primary: #4F46E5;
+      --primary-light: #EEF2FF;
+      --primary-dark: #3730A3;
+      --secondary: #F59E0B;
+      --secondary-light: #FEF3C7;
+      --bg: #F8FAFC;
+      --card: #FFFFFF;
+      --text: #1E293B;
+      --text-secondary: #64748B;
+      --text-muted: #94A3B8;
+      --border: #E2E8F0;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 20px;
+      overflow-x: auto;
+    }
+
+    .main-wrapper {
+      display: flex;
+      gap: 20px;
+      width: 100%;
+      max-width: 1600px;
+    }
+
+    .calendar-container {
+      flex: 1;
+      min-width: 800px;
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+    }
+
+    .side-panel {
+      width: 360px;
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .calendar-header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .calendar-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    .calendar-subtitle {
+      font-size: 14px;
+      opacity: 0.9;
+      font-weight: 400;
+    }
+
+    .calendar-nav {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    .nav-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.1);
+    }
+
+    .nav-btn:active {
+      transform: scale(0.95);
+    }
+
+    .calendar-body {
+      padding: 8px;
+    }
+
+    .weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      margin-bottom: 2px;
+    }
+
+    .weekday {
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      padding: 8px;
+      background: #F1F5F9;
+      border-radius: 6px;
+    }
+
+    .calendar-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .week-row {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+
+    .day-cell {
+      display: flex;
+      flex-direction: column;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #F8FAFC;
+      min-height: 100px;
+      transition: all 0.2s ease;
+    }
+
+    .day-cell:hover {
+      background: var(--primary-light);
+    }
+
+    .day-cell.other-month {
+      opacity: 0.3;
+      background: #F1F5F9;
+    }
+
+    .day-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 6px;
+      background: white;
+      border-bottom: 1px solid var(--border);
+      min-height: 28px;
+    }
+
+    .day-number {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .day-number.today {
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .day-number.selected {
+      background: var(--primary);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .side-panel-header {
+      padding: 16px;
+      background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+      color: white;
+    }
+
+    .side-panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .side-panel-subtitle {
+      font-size: 12px;
+      opacity: 0.9;
+      margin-top: 4px;
+    }
+
+    .side-panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+
+    .side-panel-upload {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .side-panel-upload-btn-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    .side-panel-upload-btn {
+      padding: 8px 12px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .side-panel-upload-btn:hover {
+      background: var(--primary-dark);
+    }
+
+    #courseSystemFileInput {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .side-panel-upload-status {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      text-align: center;
+    }
+
+    .side-panel-upload-status.success {
+      background: #ECFDF5;
+      color: #065F46;
+    }
+
+    .side-panel-upload-status.error {
+      background: #FEF2F2;
+      color: #DC2626;
+    }
+
+    .side-panel-upload-status.info {
+      background: #EFF6FF;
+      color: #1D4ED8;
+    }
+
+    .course-system-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .course-system-table th,
+    .course-system-table td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .course-system-table th {
+      background: #F1F5F9;
+      font-weight: 600;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    .course-system-table td {
+      color: var(--text);
+    }
+
+    .course-system-table tr.row-unscheduled {
+      background: #FEF2F2;
+    }
+
+    .course-system-table tr.row-unscheduled td {
+      color: #9CA3AF;
+      text-decoration: line-through;
+    }
+
+    .status-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .status-tag.success {
+      background: #ECFDF5;
+      color: #065F46;
+    }
+
+    .status-tag.error {
+      background: #FEF2F2;
+      color: #DC2626;
+    }
+
+    .unscheduled-stat .course-system-stat-value {
+      color: #DC2626;
+    }
+
+    .course-system-empty {
+      text-align: center;
+      padding: 30px 15px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .course-system-stats {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+      padding: 10px;
+      background: #F8FAFC;
+      border-radius: 8px;
+    }
+
+    .course-system-stat-item {
+      flex: 1;
+      text-align: center;
+    }
+
+    .course-system-stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .course-system-stat-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .upload-section {
+      padding: 12px 16px;
+      background: #F1F5F9;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .upload-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .upload-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .upload-icon {
+      font-size: 16px;
+    }
+
+    .upload-text {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .upload-btn-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    .upload-btn {
+      padding: 8px 16px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .upload-btn:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow);
+    }
+
+    .upload-btn:active {
+      transform: translateY(0);
+    }
+
+    #fileInput {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .upload-status {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 4px;
+    }
+
+    .upload-status.success {
+      background: #ECFDF5;
+      color: #065F46;
+    }
+
+    .upload-status.error {
+      background: #FEF2F2;
+      color: #DC2626;
+    }
+
+    .schedule-btn {
+      padding: 8px 16px;
+      background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+    }
+
+    .schedule-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+
+    .schedule-btn:active {
+      transform: translateY(0);
+    }
+
+    .schedule-btn:disabled {
+      background: #CBD5E1;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .upload-status.info {
+      background: #EFF6FF;
+      color: #1D4ED8;
+    }
+
+    .day-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--secondary);
+    }
+
+    .day-courses {
+      flex: 1;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-height: 0;
+    }
+
+    .course-card {
+      padding: 5px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      line-height: 1.4;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .course-card:hover {
+      transform: translateX(2px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .course-card.math {
+      background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+      border-left: 3px solid #4338CA;
+    }
+
+    .course-card.english {
+      background: linear-gradient(135deg, #FCE7F3 0%, #FBCFE8 100%);
+      border-left: 3px solid #BE185D;
+    }
+
+    .course-card.physics {
+      background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+      border-left: 3px solid #065F46;
+    }
+
+    .course-card.chemistry {
+      background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
+      border-left: 3px solid #92400E;
+    }
+
+    .course-card.default {
+      background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+      border-left: 3px solid #4338CA;
+    }
+
+    .course-card.scheduled {
+      background: linear-gradient(135deg, #DBEAFE 0%, #93C5FD 100%);
+      border-left: 3px solid #1D4ED8;
+    }
+
+    .availability-card {
+      padding: 5px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      line-height: 1.4;
+      background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
+      border-left: 3px solid #059669;
+      border-radius: 4px;
+    }
+
+    .availability-time {
+      font-weight: 600;
+      color: #065F46;
+      margin-bottom: 2px;
+    }
+
+    .availability-teacher {
+      font-size: 11px;
+      color: #047857;
+    }
+
+    .course-name {
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 1px;
+    }
+
+    .course-time {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 1px;
+    }
+
+    .course-teacher {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .data-list-section {
+      padding: 12px 16px;
+      background: white;
+      border-top: 1px solid var(--border);
+      max-height: 250px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .data-list-section + .data-list-section {
+      border-top: 2px solid var(--primary-light);
+    }
+
+    .data-list-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .data-list-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .data-list-count {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+
+    .data-list-content {
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .data-list-empty {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 12px;
+    }
+
+    .data-list-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .data-list-table th {
+      position: sticky;
+      top: 0;
+      background: #F8FAFC;
+      color: var(--text-secondary);
+      font-weight: 600;
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .data-list-table td {
+      padding: 5px 8px;
+      border-bottom: 1px solid #F1F5F9;
+      color: var(--text);
+    }
+
+    .data-list-table tr:hover {
+      background: #F8FAFC;
+    }
+
+    .delete-btn {
+      background: #FEF2F2;
+      color: #DC2626;
+      border: none;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .delete-btn:hover {
+      background: #DC2626;
+      color: white;
+    }
+
+    .data-list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px;
+      border-bottom: 1px solid #F1F5F9;
+      gap: 8px;
+    }
+
+    .data-list-item:hover {
+      background: #F8FAFC;
+    }
+
+    .data-list-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .data-list-text {
+      font-size: 12px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .data-list-subtext {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .scheduled-list-item {
+      background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+    }
+
+    .scheduled-list-item .data-list-text {
+      color: #4338CA;
+      font-weight: 500;
+    }
+
+    @media (max-width: 1200px) {
+      .main-wrapper {
+        flex-direction: column;
+      }
+
+      .side-panel {
+        width: 100%;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+    }
+
+    @media (max-width: 800px) {
+      body {
+        padding: 10px;
+      }
+
+      .calendar-container {
+        min-width: auto;
+        width: 100%;
+        border-radius: 12px;
+      }
+
+      .side-panel {
+        width: 100%;
+      }
+
+      .calendar-header {
+        padding: 16px;
+      }
+
+      .calendar-title {
+        font-size: 18px;
+      }
+
+      .day-cell {
+        min-height: 80px;
+      }
+
+      .course-card {
+        font-size: 11px;
+        padding: 4px 5px;
+      }
+
+      .day-header {
+        padding: 3px 4px;
+      }
+
+      .day-number {
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="main-wrapper">
+    <div class="calendar-container">
+      <div class="calendar-header">
+      <div class="calendar-title" id="calendarTitle">2026年7月</div>
+      <div class="calendar-subtitle" id="calendarSubtitle">星期二</div>
+      <div class="calendar-nav">
+        <button class="nav-btn" id="prevMonthBtn">‹</button>
+        <button class="nav-btn" id="todayBtn">●</button>
+        <button class="nav-btn" id="nextMonthBtn">›</button>
+      </div>
+    </div>
+
+    <div class="upload-section">
+      <div class="upload-left">
+        <span class="upload-icon">📊</span>
+        <span class="upload-text">上传师资空闲时间表（Excel格式）</span>
+      </div>
+      <div class="upload-right">
+        <div class="upload-btn-wrapper">
+          <button class="upload-btn">
+            <span>📁</span>
+            <span>选择文件</span>
+          </button>
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+        </div>
+        <span class="upload-status info" id="uploadStatus">等待上传</span>
+        <button class="schedule-btn" id="scheduleBtn">
+          <span>📅</span>
+          <span>智能排课</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="data-list-section" id="availabilityListSection">
+      <div class="data-list-header">
+        <div class="data-list-title">⏰ 空闲时间列表</div>
+        <div class="data-list-count" id="availabilityListCount">0 条</div>
+      </div>
+      <div class="data-list-content" id="availabilityListContent">
+        <div class="data-list-empty">暂无空闲时间数据</div>
+      </div>
+    </div>
+
+    <div class="data-list-section" id="scheduledListSection">
+      <div class="data-list-header">
+        <div class="data-list-title">📅 排课结果列表</div>
+        <div class="data-list-count" id="scheduledListCount">0 条</div>
+      </div>
+      <div class="data-list-content" id="scheduledListContent">
+        <div class="data-list-empty">暂无排课数据</div>
+      </div>
+    </div>
+
+    <div class="calendar-body">
+      <div class="weekdays">
+        <div class="weekday">日</div>
+        <div class="weekday">一</div>
+        <div class="weekday">二</div>
+        <div class="weekday">三</div>
+        <div class="weekday">四</div>
+        <div class="weekday">五</div>
+        <div class="weekday">六</div>
+      </div>
+      <div class="calendar-grid" id="calendarGrid"></div>
+    </div>
+
+    <div class="side-panel">
+      <div class="side-panel-header">
+        <div class="side-panel-title">📋 课程体系表</div>
+        <div class="side-panel-subtitle">班型 · 课程名称 · 师资 · 时长</div>
+      </div>
+      <div class="side-panel-upload">
+        <div class="side-panel-upload-btn-wrapper">
+          <button class="side-panel-upload-btn">
+            <span>📁</span>
+            <span>上传课程体系表</span>
+          </button>
+          <input type="file" id="courseSystemFileInput" accept=".xlsx,.xls,.csv">
+        </div>
+        <span class="side-panel-upload-status info" id="courseSystemStatus">等待上传</span>
+      </div>
+      <div class="side-panel-body" id="courseSystemBody">
+        <div class="course-system-empty">请上传课程体系表Excel文件</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+    const months = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
+
+    let currentDate = new Date();
+    let selectedDate = null;
+
+    const courses = [];
+
+    let availabilityData = [];
+    let courseSystemData = [];
+
+    function formatDate(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function getCoursesForDate(dateStr) {
+      return courses.filter(course => course.date === dateStr).sort((a, b) => a.startTime.localeCompare(b.startTime));
+    }
+
+    function getAvailabilityForDate(dateStr) {
+      return availabilityData.filter(item => item.date === dateStr).sort((a, b) => a.startTime.localeCompare(b.startTime));
+    }
+
+    function parseExcelDate(excelDate) {
+      if (!isNaN(excelDate)) {
+        const date = new Date((excelDate - 25569) * 86400 * 1000);
+        date.setHours(date.getHours() + 8);
+        return date;
+      }
+      return new Date(excelDate);
+    }
+
+    function formatExcelDate(excelDate) {
+      const date = parseExcelDate(excelDate);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function formatExcelTime(excelTime) {
+      if (typeof excelTime === 'number' && !isNaN(excelTime)) {
+        const hours = Math.floor(excelTime * 24);
+        const minutes = Math.floor((excelTime * 24 - hours) * 60);
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+      }
+      const timeStr = String(excelTime || '').trim();
+      if (timeStr.match(/^\d{1,2}:\d{2}$/)) {
+        const [h, m] = timeStr.split(':');
+        return `${String(parseInt(h)).padStart(2, '0')}:${String(parseInt(m)).padStart(2, '0')}`;
+      }
+      return timeStr;
+    }
+
+    function renderAvailabilityList() {
+      const content = document.getElementById('availabilityListContent');
+      const count = document.getElementById('availabilityListCount');
+
+      if (availabilityData.length === 0) {
+        content.innerHTML = '<div class="data-list-empty">暂无空闲时间数据</div>';
+        count.textContent = '0 条';
+        return;
+      }
+
+      count.textContent = `${availabilityData.length} 条`;
+
+      let html = '';
+      availabilityData.forEach((item, index) => {
+        html += `
+          <div class="data-list-item">
+            <div class="data-list-info">
+              <div class="data-list-text">${item.teacher}</div>
+              <div class="data-list-subtext">${item.date} · ${item.startTime} - ${item.endTime}</div>
+            </div>
+            <button class="delete-btn" onclick="deleteAvailabilityItem(${index})">删除</button>
+          </div>
+        `;
+      });
+
+      content.innerHTML = html;
+    }
+
+    function deleteAvailabilityItem(index) {
+      availabilityData.splice(index, 1);
+      renderAvailabilityList();
+      renderCalendar();
+    }
+
+    function renderScheduledList() {
+      const content = document.getElementById('scheduledListContent');
+      const count = document.getElementById('scheduledListCount');
+
+      if (courses.length === 0) {
+        content.innerHTML = '<div class="data-list-empty">暂无排课数据</div>';
+        count.textContent = '0 条';
+        return;
+      }
+
+      count.textContent = `${courses.length} 条`;
+
+      let html = '';
+      courses.forEach((course, index) => {
+        const displayName = course.name || '未命名课程';
+        const displayTeacher = (course.teacher || '').replace('老师', '');
+        const originalIndex = course.id !== undefined ? course.id - 100 : index;
+
+        html += `
+          <div class="data-list-item scheduled-list-item">
+            <div class="data-list-info">
+              <div class="data-list-text">${displayName}</div>
+              <div class="data-list-subtext">${course.date} · ${course.startTime} - ${course.endTime} · ${displayTeacher}</div>
+            </div>
+            <button class="delete-btn" onclick="deleteScheduledItem(${index})">删除</button>
+          </div>
+        `;
+      });
+
+      content.innerHTML = html;
+    }
+
+    function deleteScheduledItem(index) {
+      const deletedCourse = courses[index];
+      if (!deletedCourse) return;
+
+      const courseName = deletedCourse.name;
+      const courseDate = deletedCourse.date;
+      const originalIndex = deletedCourse.id !== undefined ? deletedCourse.id - 100 : -1;
+
+      courses.splice(index, 1);
+
+      if (originalIndex >= 0 && originalIndex < courseSystemData.length) {
+        courseSystemData[originalIndex].scheduled = null;
+      }
+
+      const teacher = deletedCourse.teacher?.replace('老师', '');
+      if (teacher) {
+        renderCourseSystem();
+      }
+
+      renderScheduledList();
+      renderCalendar();
+    }
+
+    function deleteCourseSystemItem(index) {
+      const deletedItem = courseSystemData[index];
+      if (!deletedItem) return;
+
+      if (deletedItem.scheduled === true) {
+        const relatedCourseIndex = courses.findIndex(c => {
+          const origIdx = c.id !== undefined ? c.id - 100 : -1;
+          return origIdx === index;
+        });
+
+        if (relatedCourseIndex >= 0) {
+          courses.splice(relatedCourseIndex, 1);
+        }
+      }
+
+      courseSystemData.splice(index, 1);
+      renderCourseSystem();
+      renderScheduledList();
+      renderCalendar();
+    }
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const statusEl = document.getElementById('uploadStatus');
+      statusEl.className = 'upload-status info';
+      statusEl.textContent = '正在解析文件...';
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+          if (jsonData.length < 2) {
+            throw new Error('Excel文件内容为空');
+          }
+
+          const headers = jsonData[0].map(h => String(h).trim());
+          const teacherIndex = headers.findIndex(h => h.includes('师资') || h.includes('老师') || h.includes('姓名') || h.includes('教师'));
+          const dateIndex = headers.findIndex(h => h.includes('日期'));
+          const startTimeIndex = headers.findIndex(h => h.includes('开始') || h.includes('起始'));
+          const endTimeIndex = headers.findIndex(h => h.includes('结束') || h.includes('终止'));
+
+          if (teacherIndex === -1 || dateIndex === -1 || startTimeIndex === -1 || endTimeIndex === -1) {
+            throw new Error('请确保Excel包含：师资名称、日期、开始时间、结束时间 列');
+          }
+
+          availabilityData = [];
+          for (let i = 1; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            if (!row[dateIndex]) continue;
+
+            const teacher = String(row[teacherIndex] || '').trim();
+            const date = formatExcelDate(row[dateIndex]);
+            const startTime = formatExcelTime(row[startTimeIndex]);
+            const endTime = formatExcelTime(row[endTimeIndex]);
+
+            if (teacher && startTime && endTime) {
+              availabilityData.push({
+                teacher,
+                date,
+                startTime,
+                endTime
+              });
+            }
+          }
+
+          availabilityData.sort((a, b) => {
+            if (a.date !== b.date) return a.date.localeCompare(b.date);
+            return a.startTime.localeCompare(b.startTime);
+          });
+
+          statusEl.className = 'upload-status success';
+          statusEl.textContent = `成功导入 ${availabilityData.length} 条空闲时间记录`;
+
+          renderAvailabilityList();
+          renderCalendar();
+        } catch (error) {
+          statusEl.className = 'upload-status error';
+          statusEl.textContent = `导入失败：${error.message}`;
+        }
+      };
+
+      reader.onerror = function() {
+        statusEl.className = 'upload-status error';
+        statusEl.textContent = '文件读取失败';
+      };
+
+      reader.readAsArrayBuffer(file);
+    }
+
+    function handleCourseSystemUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const statusEl = document.getElementById('courseSystemStatus');
+      statusEl.className = 'side-panel-upload-status info';
+      statusEl.textContent = '正在解析文件...';
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+          if (jsonData.length < 2) {
+            throw new Error('Excel文件内容为空');
+          }
+
+          const headers = jsonData[0].map(h => String(h).trim());
+          const classTypeIndex = headers.findIndex(h => h.includes('班型') || h.includes('班级') || h.includes('课程类型'));
+          const courseNameIndex = headers.findIndex(h => h.includes('课程名称') || h.includes('课程名') || h.includes('课程'));
+          const teacherIndex = headers.findIndex(h => h.includes('师资') || h.includes('老师') || h.includes('姓名') || h.includes('教师'));
+          const durationIndex = headers.findIndex(h => h.includes('时长') || h.includes('课时') || h.includes('时间'));
+
+          if (classTypeIndex === -1 || courseNameIndex === -1 || teacherIndex === -1 || durationIndex === -1) {
+            throw new Error('请确保Excel包含：班型、课程名称、师资名称、时长 列');
+          }
+
+          courseSystemData = [];
+          for (let i = 1; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            if (!row[classTypeIndex]) continue;
+
+            const classType = String(row[classTypeIndex] || '').trim();
+            const courseName = String(row[courseNameIndex] || '').trim();
+            const teacher = String(row[teacherIndex] || '').trim();
+            const duration = String(row[durationIndex] || '').trim();
+
+            if (classType && courseName && teacher && duration) {
+              courseSystemData.push({
+                classType,
+                courseName,
+                teacher,
+                duration,
+                scheduled: null
+              });
+            }
+          }
+
+          statusEl.className = 'side-panel-upload-status success';
+          statusEl.textContent = `成功导入 ${courseSystemData.length} 条课程记录`;
+
+          renderScheduledList();
+          renderCourseSystem();
+        } catch (error) {
+          statusEl.className = 'side-panel-upload-status error';
+          statusEl.textContent = `导入失败：${error.message}`;
+        }
+      };
+
+      reader.onerror = function() {
+        statusEl.className = 'side-panel-upload-status error';
+        statusEl.textContent = '文件读取失败';
+      };
+
+      reader.readAsArrayBuffer(file);
+    }
+
+    function renderCourseSystem() {
+      const body = document.getElementById('courseSystemBody');
+      
+      if (courseSystemData.length === 0) {
+        body.innerHTML = '<div class="course-system-empty">请上传课程体系表Excel文件</div>';
+        return;
+      }
+
+      const uniqueClasses = [...new Set(courseSystemData.map(item => item.classType))];
+      const uniqueTeachers = [...new Set(courseSystemData.map(item => item.teacher))];
+      const scheduledCount = courseSystemData.filter(item => item.scheduled === true).length;
+      const unscheduledCount = courseSystemData.filter(item => item.scheduled === false).length;
+
+      let html = `
+        <div class="course-system-stats">
+          <div class="course-system-stat-item">
+            <div class="course-system-stat-value">${uniqueClasses.length}</div>
+            <div class="course-system-stat-label">班型</div>
+          </div>
+          <div class="course-system-stat-item">
+            <div class="course-system-stat-value">${uniqueTeachers.length}</div>
+            <div class="course-system-stat-label">师资</div>
+          </div>
+          <div class="course-system-stat-item">
+            <div class="course-system-stat-value">${courseSystemData.length}</div>
+            <div class="course-system-stat-label">课程</div>
+          </div>
+          ${unscheduledCount > 0 ? `
+          <div class="course-system-stat-item unscheduled-stat">
+            <div class="course-system-stat-value">${unscheduledCount}</div>
+            <div class="course-system-stat-label">未排课</div>
+          </div>` : ''}
+        </div>
+        <table class="course-system-table">
+          <thead>
+            <tr>
+              <th>班型</th>
+              <th>课程名称</th>
+              <th>师资名称</th>
+              <th>时长</th>
+              ${courseSystemData.some(i => i.scheduled !== null) ? '<th>状态</th>' : ''}
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      courseSystemData.forEach((item, index) => {
+        const rowClass = item.scheduled === false ? ' class="row-unscheduled"' : '';
+        html += `
+          <tr${rowClass}>
+            <td>${item.classType}</td>
+            <td>${item.courseName}</td>
+            <td>${item.teacher}</td>
+            <td>${item.duration}</td>
+            ${item.scheduled !== null ? `<td>${item.scheduled ? '<span class="status-tag success">✓ 已排课</span>' : '<span class="status-tag error">✗ 无空闲时间</span>'}</td>` : ''}
+            <td><button class="delete-btn" onclick="deleteCourseSystemItem(${index})">删除</button></td>
+          </tr>
+        `;
+      });
+
+      html += `
+          </tbody>
+        </table>
+      `;
+
+      body.innerHTML = html;
+    }
+
+    function timeToMinutes(timeStr) {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours * 60 + minutes;
+    }
+
+    function minutesToTime(minutes) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    }
+
+    function durationToMinutes(duration) {
+      const str = String(duration).trim();
+      if (/^\d+(\.\d+)?$/.test(str)) {
+        return Math.round(parseFloat(str));
+      }
+      const match = str.match(/(\d+)\s*(分钟|小时|h|hr|min)?/);
+      if (match) {
+        const value = parseInt(match[1]);
+        const unit = match[2] || '分钟';
+        if (unit.includes('小时') || unit === 'h' || unit === 'hr') {
+          return value * 60;
+        }
+        return value;
+      }
+      return 60;
+    }
+
+    function generateSchedule() {
+      if (availabilityData.length === 0) {
+        alert('请先上传师资空闲时间表');
+        return;
+      }
+
+      if (courseSystemData.length === 0) {
+        alert('请先上传课程体系表');
+        return;
+      }
+
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const totalDays = new Date(year, month + 1, 0).getDate();
+
+      const currentMonthDates = [];
+      for (let i = 1; i <= totalDays; i++) {
+        currentMonthDates.push(formatDate(new Date(year, month, i)));
+      }
+
+      const monthAvailability = availabilityData.filter(a => currentMonthDates.includes(a.date));
+      if (monthAvailability.length === 0) {
+        alert('当前月份没有可用的师资空闲时间');
+        return;
+      }
+
+      const MIN_GAP = 10;
+      const FALLBACK_GAP = 5;
+      const CLASS_MIN_GAP = 5;
+
+      function calculateTimePriorityScore(slotStartMinutes) {
+        const EVENING_START = 18 * 60; // 18:00 = 1080分钟
+        const EVENING_END = 22 * 60;   // 22:00 = 1320分钟
+        const OPTIMAL_EVENING = 19 * 60; // 19:00 = 1140分钟
+        const AFTERNOON_START = 13 * 60; // 13:00 = 780分钟
+        const MORNING_END = 12 * 60;    // 12:00 = 720分钟
+
+        if (slotStartMinutes >= EVENING_START && slotStartMinutes <= EVENING_END) {
+          const distanceFromOptimal = Math.abs(slotStartMinutes - OPTIMAL_EVENING);
+          const maxDistance = Math.max(OPTIMAL_EVENING - EVENING_START, EVENING_END - OPTIMAL_EVENING);
+          return 200 - (distanceFromOptimal / maxDistance) * 50;
+        }
+
+        if (slotStartMinutes >= AFTERNOON_START && slotStartMinutes < EVENING_START) {
+          const progress = (slotStartMinutes - AFTERNOON_START) / (EVENING_START - AFTERNOON_START);
+          return 100 + progress * 50;
+        }
+
+        if (slotStartMinutes >= MORNING_END && slotStartMinutes < AFTERNOON_START) {
+          return 90;
+        }
+
+        if (slotStartMinutes >= 8 * 60 && slotStartMinutes < MORNING_END) {
+          const progress = (slotStartMinutes - 8 * 60) / (MORNING_END - 8 * 60);
+          return 50 + progress * 40;
+        }
+
+        if (slotStartMinutes < 8 * 60) {
+          return 20;
+        }
+
+        return 30;
+      }
+
+      function hasEveningTime(dateAvailabilities) {
+        const EVENING_START = 18 * 60;
+        for (const avail of dateAvailabilities) {
+          const start = timeToMinutes(avail.startTime);
+          const end = timeToMinutes(avail.endTime);
+          if (start < EVENING_START && end > 18 * 60) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      function calculateDatePriorityScore(dateAvailabilities, durationMinutes) {
+        const EVENING_START = 18 * 60;
+        const AFTERNOON_START = 13 * 60;
+        const MORNING_END = 12 * 60;
+
+        let maxScore = 0;
+
+        for (const avail of dateAvailabilities) {
+          const availStart = timeToMinutes(avail.startTime);
+          const availEnd = timeToMinutes(avail.endTime);
+
+          for (let offset = 0; offset <= availEnd - availStart - durationMinutes; offset += 5) {
+            const slotStart = availStart + offset;
+            const score = calculateTimePriorityScore(slotStart);
+            if (score > maxScore) {
+              maxScore = score;
+            }
+          }
+        }
+
+        return maxScore;
+      }
+
+      const scheduledCourses = [];
+      const teacherScheduleByDate = {};
+      const classScheduleByDate = {};
+      const teacherHasCourseOnDay = {};
+      const dayCourseCounts = {};
+
+      courseSystemData.forEach(item => { item.scheduled = false; });
+
+      function dateTimeToMinutes(dateStr, timeStr) {
+        const date = new Date(dateStr);
+        const timeParts = timeStr.split(':').map(Number);
+        return date.getFullYear() * 525600 + date.getMonth() * 43800 + date.getDate() * 1440 + timeParts[0] * 60 + timeParts[1];
+      }
+
+      const teacherCourses = {};
+      courseSystemData.forEach((courseItem, index) => {
+        const teacher = courseItem.teacher;
+        if (!teacherCourses[teacher]) {
+          teacherCourses[teacher] = [];
+        }
+        teacherCourses[teacher].push({ ...courseItem, originalIndex: index });
+      });
+
+      function calculateDispersionScore(dates, availableDates) {
+        if (dates.length === 0) return -Infinity;
+
+        const dateIndices = dates.map(d => availableDates.indexOf(d)).filter(i => i >= 0);
+        if (dateIndices.length < 2) return -Infinity;
+
+        const firstIdx = dateIndices[0];
+        const lastIdx = dateIndices[dateIndices.length - 1];
+        const totalRange = availableDates.length - 1;
+        const coverage = (lastIdx - firstIdx) / totalRange;
+
+        const gaps = [];
+        for (let i = 1; i < dateIndices.length; i++) {
+          gaps.push(dateIndices[i] - dateIndices[i - 1]);
+        }
+
+        const meanGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+        const variance = gaps.reduce((sum, g) => sum + Math.pow(g - meanGap, 2), 0) / gaps.length;
+        const stdDev = Math.sqrt(variance);
+
+        const minGap = Math.min(...gaps);
+        const maxGap = Math.max(...gaps);
+
+        const gapRange = maxGap - minGap;
+        const uniformityScore = 1 / (1 + stdDev);
+        const minGapScore = minGap;
+        const balanceScore = 1 / (1 + gapRange);
+        const coverageScore = coverage * 100;
+
+        return uniformityScore * 50 + minGapScore * 5 + balanceScore * 20 + coverageScore;
+      }
+
+      function generateDispersionPlans(availableDates, totalCourses, datePriorityMap) {
+        const plans = [];
+
+        const eveningDates = availableDates.filter(d => datePriorityMap?.[d] === 'evening');
+        const afternoonDates = availableDates.filter(d => datePriorityMap?.[d] === 'afternoon');
+        const morningDates = availableDates.filter(d => datePriorityMap?.[d] === 'morning');
+
+        if (availableDates.length <= totalCourses) {
+          const sortedDates = [...eveningDates, ...afternoonDates, ...morningDates];
+          plans.push({
+            dates: sortedDates.slice(0, availableDates.length),
+            description: 'priority-limited-days'
+          });
+          return plans;
+        }
+
+        if (totalCourses === 1) {
+          const sortedDates = [...eveningDates, ...afternoonDates, ...morningDates];
+          plans.push({ dates: [sortedDates[Math.floor(sortedDates.length / 2)]], description: 'single' });
+          return plans;
+        }
+
+        const priorityDates = [...eveningDates, ...afternoonDates, ...morningDates];
+
+        if (eveningDates.length >= totalCourses) {
+          const eveningPlan = [];
+          const eveningInterval = Math.ceil(eveningDates.length / totalCourses);
+          for (let i = 0; i < totalCourses; i++) {
+            const idx = Math.min(i * eveningInterval, eveningDates.length - 1);
+            eveningPlan.push(eveningDates[idx]);
+          }
+          plans.push({ dates: eveningPlan, description: 'evening-priority' });
+        }
+
+        const linearDates = [];
+        for (let i = 0; i < totalCourses; i++) {
+          const pos = i / (totalCourses - 1);
+          const idx = Math.round(pos * (priorityDates.length - 1));
+          linearDates.push(priorityDates[idx]);
+        }
+        plans.push({ dates: linearDates, description: 'priority-linear-spread' });
+
+        const linearEvenDates = [];
+        for (let i = 0; i < totalCourses; i++) {
+          const pos = (i + 0.5) / totalCourses;
+          const idx = Math.floor(pos * priorityDates.length);
+          linearEvenDates.push(priorityDates[Math.min(idx, priorityDates.length - 1)]);
+        }
+        plans.push({ dates: linearEvenDates, description: 'priority-linear-even' });
+
+        const baseInterval = Math.ceil(priorityDates.length / totalCourses);
+
+        for (let offset = 0; offset < Math.min(baseInterval, 3); offset++) {
+          const dates = [];
+          let idx = offset;
+          for (let i = 0; i < totalCourses && idx < priorityDates.length; i++) {
+            dates.push(priorityDates[idx]);
+            idx += baseInterval;
+          }
+          if (dates.length === totalCourses) {
+            plans.push({ dates, description: `priority-offset-${offset}` });
+          }
+        }
+
+        for (let interval = Math.max(2, baseInterval - 2); interval <= baseInterval + 2; interval++) {
+          const dates = [];
+          for (let i = 0; i < totalCourses && i * interval < priorityDates.length; i++) {
+            dates.push(priorityDates[i * interval]);
+          }
+          if (dates.length === totalCourses) {
+            plans.push({ dates, description: `priority-interval-${interval}` });
+          }
+        }
+
+        return plans;
+      }
+
+      function findBestDispersionPlan(availableDates, totalCourses, teacher) {
+        const datePriorityMap = {};
+        for (const date of availableDates) {
+          const dateAvailabilities = monthAvailability.filter(a => a.date === date && a.teacher === teacher);
+          const maxScore = calculateDatePriorityScore(dateAvailabilities, 0);
+          if (maxScore >= 150) {
+            datePriorityMap[date] = 'evening';
+          } else if (maxScore >= 100) {
+            datePriorityMap[date] = 'afternoon';
+          } else {
+            datePriorityMap[date] = 'morning';
+          }
+        }
+
+        const eveningDates = availableDates.filter(d => datePriorityMap[d] === 'evening');
+
+        let primaryPlan = null;
+        let secondaryPlan = null;
+
+        if (eveningDates.length >= totalCourses) {
+          const eveningPlans = generateDispersionPlans(eveningDates, totalCourses, datePriorityMap);
+          let bestEveningPlan = null;
+          let bestEveningScore = -Infinity;
+          for (const plan of eveningPlans) {
+            const score = calculateDispersionScore(plan.dates, eveningDates);
+            if (score > bestEveningScore) {
+              bestEveningScore = score;
+              bestEveningPlan = plan;
+            }
+          }
+          primaryPlan = bestEveningPlan;
+        }
+
+        const allPlans = generateDispersionPlans(availableDates, totalCourses, datePriorityMap);
+        let bestAllPlan = null;
+        let bestAllScore = -Infinity;
+        for (const plan of allPlans) {
+          const score = calculateDispersionScore(plan.dates, availableDates);
+          if (score > bestAllScore) {
+            bestAllScore = score;
+            bestAllPlan = plan;
+          }
+        }
+
+        secondaryPlan = bestAllPlan;
+
+        if (primaryPlan) {
+          console.log('分散方案选择:', primaryPlan.description, '评分:', bestAllScore, '日期:', primaryPlan.dates, '(优先使用晚上时间)');
+        } else {
+          console.log('分散方案选择:', secondaryPlan?.description, '评分:', bestAllScore, '日期:', secondaryPlan?.dates, '(晚上时间不足，使用所有空闲时间)');
+        }
+
+        return {
+          primary: primaryPlan || secondaryPlan,
+          secondary: secondaryPlan,
+          hasEveningPriority: !!primaryPlan
+        };
+      }
+
+      for (const teacher in teacherCourses) {
+        const courses = teacherCourses[teacher];
+
+        const teacherAvailableDates = [...new Set(
+          monthAvailability.filter(a => a.teacher === teacher).map(a => a.date)
+        )].sort();
+
+        const totalCourses = courses.length;
+        const availableDays = teacherAvailableDates.length;
+
+        if (availableDays === 0) {
+          courses.forEach(course => {
+            courseSystemData[course.originalIndex].scheduled = false;
+          });
+          continue;
+        }
+
+        const bestPlan = findBestDispersionPlan(teacherAvailableDates, totalCourses, teacher);
+        const primaryDates = bestPlan.primary?.dates || [];
+        const secondaryDates = bestPlan.secondary?.dates || teacherAvailableDates;
+
+        function tryScheduleCourse(courseItem, targetDates, minGap) {
+          const { classType, courseName, duration, originalIndex } = courseItem;
+          const durationMinutes = durationToMinutes(duration);
+
+          if (!teacherScheduleByDate[teacher]) {
+            teacherScheduleByDate[teacher] = {};
+          }
+          if (!classScheduleByDate[classType]) {
+            classScheduleByDate[classType] = {};
+          }
+
+          let bestSlot = null;
+
+          for (const targetDate of targetDates) {
+            const dateAvailabilities = monthAvailability.filter(a => a.date === targetDate && a.teacher === teacher);
+
+            if (dateAvailabilities.length === 0) continue;
+
+            const existingTeacherCourses = teacherScheduleByDate[teacher]?.[targetDate] || [];
+            const existingTeacherStarts = existingTeacherCourses.map(c => timeToMinutes(c.startTime));
+            const existingTeacherEnds = existingTeacherCourses.map(c => timeToMinutes(c.endTime));
+
+            const existingClassCourses = classScheduleByDate[classType]?.[targetDate] || [];
+            const existingClassStarts = existingClassCourses.map(c => timeToMinutes(c.startTime));
+            const existingClassEnds = existingClassCourses.map(c => timeToMinutes(c.endTime));
+
+            let dateBestScore = -Infinity;
+            let dateBestSlot = null;
+
+            for (const avail of dateAvailabilities) {
+              const availStart = timeToMinutes(avail.startTime);
+              const availEnd = timeToMinutes(avail.endTime);
+
+              for (let offset = 0; offset <= availEnd - availStart - durationMinutes; offset += 5) {
+                const slotStart = availStart + offset;
+                const slotEnd = slotStart + durationMinutes;
+                if (slotEnd > availEnd) break;
+
+                let conflict = false;
+
+                for (let i = 0; i < existingTeacherCourses.length; i++) {
+                  const eStart = existingTeacherStarts[i];
+                  const eEnd = existingTeacherEnds[i];
+                  if (!(slotEnd + minGap <= eStart || slotStart - minGap >= eEnd)) {
+                    conflict = true;
+                    break;
+                  }
+                }
+                if (conflict) continue;
+
+                for (let i = 0; i < existingClassCourses.length; i++) {
+                  const eStart = existingClassStarts[i];
+                  const eEnd = existingClassEnds[i];
+                  if (!(slotEnd + CLASS_MIN_GAP <= eStart || slotStart - CLASS_MIN_GAP >= eEnd)) {
+                    conflict = true;
+                    break;
+                  }
+                }
+                if (conflict) continue;
+
+                const timeScore = calculateTimePriorityScore(slotStart);
+                if (timeScore > dateBestScore) {
+                  dateBestScore = timeScore;
+                  dateBestSlot = {
+                    date: targetDate,
+                    startTime: minutesToTime(slotStart),
+                    endTime: minutesToTime(slotEnd)
+                  };
+                }
+              }
+            }
+
+            if (dateBestSlot) {
+              bestSlot = dateBestSlot;
+              break;
+            }
+          }
+
+          if (bestSlot) {
+            courseSystemData[originalIndex].scheduled = true;
+            scheduledCourses.push({
+              id: originalIndex + 100,
+              name: courseName,
+              date: bestSlot.date,
+              startTime: bestSlot.startTime,
+              endTime: bestSlot.endTime,
+              teacher: `${teacher}老师`,
+              type: 'scheduled'
+            });
+
+            if (!teacherScheduleByDate[teacher][bestSlot.date]) {
+              teacherScheduleByDate[teacher][bestSlot.date] = [];
+            }
+            teacherScheduleByDate[teacher][bestSlot.date].push({
+              startTime: bestSlot.startTime,
+              endTime: bestSlot.endTime
+            });
+
+            if (!classScheduleByDate[classType][bestSlot.date]) {
+              classScheduleByDate[classType][bestSlot.date] = [];
+            }
+            classScheduleByDate[classType][bestSlot.date].push({
+              startTime: bestSlot.startTime,
+              endTime: bestSlot.endTime
+            });
+
+            teacherHasCourseOnDay[teacher][bestSlot.date] = true;
+            dayCourseCounts[bestSlot.date] = (dayCourseCounts[bestSlot.date] || 0) + 1;
+            return true;
+          }
+          return false;
+        }
+
+        const courseDateMap = {};
+        primaryDates.forEach((date, idx) => {
+          courseDateMap[idx] = date;
+        });
+
+        let scheduledCount = 0;
+
+        for (let courseIndex = 0; courseIndex < courses.length; courseIndex++) {
+          const courseItem = courses[courseIndex];
+
+          if (bestPlan.hasEveningPriority) {
+            const assignedDate = courseDateMap[courseIndex];
+            const targetDates = assignedDate ? [assignedDate] : primaryDates;
+            const success = tryScheduleCourse(courseItem, targetDates, MIN_GAP);
+            if (success) {
+              scheduledCount++;
+              continue;
+            }
+          }
+
+          const secondaryAssignedDate = courseDateMap[courseIndex];
+          const targetDates = secondaryAssignedDate ? [secondaryAssignedDate] : secondaryDates;
+          const success = tryScheduleCourse(courseItem, targetDates, FALLBACK_GAP);
+          if (success) {
+            scheduledCount++;
+          }
+        }
+
+        console.log(`师资 ${teacher}: 成功排课 ${scheduledCount}/${totalCourses}`);
+      }
+
+      const successfullyScheduled = scheduledCourses.length;
+      const failedCount = courseSystemData.length - successfullyScheduled;
+
+      courses.length = 0;
+      scheduledCourses.forEach(c => courses.push(c));
+
+      renderCalendar();
+      renderScheduledList();
+      renderCourseSystem();
+
+      const statusEl = document.getElementById('uploadStatus');
+      if (failedCount === 0) {
+        statusEl.className = 'upload-status success';
+        statusEl.textContent = `排课成功！共安排 ${successfullyScheduled} 门课程`;
+      } else {
+        statusEl.className = 'upload-status error';
+        statusEl.textContent = `排课完成！成功 ${successfullyScheduled} 门，失败 ${failedCount} 门`;
+      }
+    }
+
+    function isToday(date) {
+      const today = new Date();
+      return date.getFullYear() === today.getFullYear() &&
+             date.getMonth() === today.getMonth() &&
+             date.getDate() === today.getDate();
+    }
+
+    function isSelected(date) {
+      if (!selectedDate) return false;
+      return date.getFullYear() === selectedDate.getFullYear() &&
+             date.getMonth() === selectedDate.getMonth() &&
+             date.getDate() === selectedDate.getDate();
+    }
+
+    function getCourseCardClass(type) {
+      return `course-card ${type}`;
+    }
+
+    function renderCalendar() {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+
+      document.getElementById('calendarTitle').textContent = `${year}年${months[month]}`;
+      document.getElementById('calendarSubtitle').textContent = weekdays[currentDate.getDay()];
+
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const startDay = firstDay.getDay();
+      const totalDays = lastDay.getDate();
+
+      const calendarGrid = document.getElementById('calendarGrid');
+      calendarGrid.innerHTML = '';
+
+      const allDays = [];
+
+      const prevMonthLastDay = new Date(year, month, 0).getDate();
+      for (let i = startDay - 1; i >= 0; i--) {
+        const day = prevMonthLastDay - i;
+        const date = new Date(year, month - 1, day);
+        allDays.push({ day, date, isCurrentMonth: false });
+      }
+
+      for (let day = 1; day <= totalDays; day++) {
+        const date = new Date(year, month, day);
+        allDays.push({ day, date, isCurrentMonth: true });
+      }
+
+      const remainingDays = 42 - allDays.length;
+      for (let day = 1; day <= remainingDays; day++) {
+        const date = new Date(year, month + 1, day);
+        allDays.push({ day, date, isCurrentMonth: false });
+      }
+
+      for (let weekIndex = 0; weekIndex < 6; weekIndex++) {
+        const weekRow = document.createElement('div');
+        weekRow.className = 'week-row';
+
+        for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+          const dayData = allDays[weekIndex * 7 + dayIndex];
+          const cell = createDayCell(dayData);
+          weekRow.appendChild(cell);
+        }
+
+        calendarGrid.appendChild(weekRow);
+      }
+    }
+
+    function createDayCell(dayData) {
+      const { day, date, isCurrentMonth } = dayData;
+      const dateStr = formatDate(date);
+      const dayCourses = getCoursesForDate(dateStr);
+      const dayAvailability = getAvailabilityForDate(dateStr);
+
+      const cell = document.createElement('div');
+      cell.className = 'day-cell';
+      if (!isCurrentMonth) {
+        cell.classList.add('other-month');
+      }
+
+      const dayHeader = document.createElement('div');
+      dayHeader.className = 'day-header';
+
+      const dayNumber = document.createElement('div');
+      dayNumber.className = 'day-number';
+      dayNumber.textContent = day;
+
+      if (isToday(date)) {
+        dayNumber.classList.add('today');
+      }
+
+      if (isSelected(date)) {
+        dayNumber.classList.add('selected');
+      }
+
+      dayNumber.addEventListener('click', () => {
+        if (!isCurrentMonth) {
+          currentDate = new Date(date.getFullYear(), date.getMonth(), 1);
+          renderCalendar();
+        }
+        selectedDate = date;
+        renderCalendar();
+      });
+
+      dayHeader.appendChild(dayNumber);
+
+      if ((dayCourses.length > 0 || dayAvailability.length > 0) && isCurrentMonth) {
+        const dayDot = document.createElement('div');
+        dayDot.className = 'day-dot';
+        dayHeader.appendChild(dayDot);
+      }
+
+      cell.appendChild(dayHeader);
+
+      const dayCoursesEl = document.createElement('div');
+      dayCoursesEl.className = 'day-courses';
+
+      dayAvailability.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'availability-card';
+        
+        card.innerHTML = `
+          <div class="availability-time">${item.startTime} - ${item.endTime}</div>
+          <div class="availability-teacher">👤 ${item.teacher}</div>
+        `;
+        
+        dayCoursesEl.appendChild(card);
+      });
+
+      dayCourses.forEach(course => {
+        const card = document.createElement('div');
+        card.className = getCourseCardClass(course.type);
+        
+        card.innerHTML = `
+          <div class="course-name">${course.name}</div>
+          <div class="course-time">${course.startTime} - ${course.endTime}</div>
+          <div class="course-teacher">${course.teacher}</div>
+        `;
+        
+        dayCoursesEl.appendChild(card);
+      });
+
+      cell.appendChild(dayCoursesEl);
+
+      return cell;
+    }
+
+    document.getElementById('prevMonthBtn').addEventListener('click', () => {
+      currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+      renderCalendar();
+    });
+
+    document.getElementById('nextMonthBtn').addEventListener('click', () => {
+      currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+      renderCalendar();
+    });
+
+    document.getElementById('todayBtn').addEventListener('click', () => {
+      currentDate = new Date();
+      selectedDate = new Date();
+      renderCalendar();
+    });
+
+    document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+    document.getElementById('courseSystemFileInput').addEventListener('change', handleCourseSystemUpload);
+    document.getElementById('scheduleBtn').addEventListener('click', generateSchedule);
+
+    selectedDate = new Date();
+    renderAvailabilityList();
+    renderScheduledList();
+    renderCalendar();
+  </script>
+</body>
+</html>

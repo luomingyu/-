@@ -1,0 +1,67 @@
+/* ===== 响应式：窄屏改为上下堆叠 ===== */
+@media (max-width: 1100px) {
+  body {
+    overflow: auto;
+  }
+
+  .app-layout {
+    height: auto;
+  }
+
+  .main-split {
+    flex-direction: column;
+    padding: 12px;
+  }
+
+  .calendar-zone {
+    min-height: 520px;
+  }
+
+  .summary-zone {
+    overflow-y: visible;
+  }
+
+  .tree-section__body {
+    max-height: none;
+  }
+}
+
+@media (max-width: 800px) {
+  .top-bar {
+    padding: 10px 14px;
+  }
+
+  .app-title {
+    font-size: 16px;
+  }
+
+  .main-split {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .calendar-header {
+    padding: 14px;
+  }
+
+  .calendar-title {
+    font-size: 18px;
+  }
+
+  .day-cell {
+    min-height: 70px;
+  }
+
+  .course-card {
+    font-size: 11px;
+    padding: 4px 5px;
+  }
+
+  .day-header {
+    padding: 3px 4px;
+  }
+
+  .day-number {
+    font-size: 12px;
+  }
+}

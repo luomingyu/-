@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>月度排课系统</title>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- ============ 顶部条 ============ -->
+    <header class="top-bar">
+      <h1 class="app-title">📅 月度排课系统</h1>
+      <div class="top-bar__actions">
+        <div class="month-selector">
+          <select id="yearSelect" class="month-selector__select"></select>
+          <select id="monthSelect" class="month-selector__select"></select>
+        </div>
+        <div class="class-filter">
+          <select id="classFilter" class="month-selector__select" title="选择班级筛选课表">
+            <option value="">全部班级</option>
+          </select>
+        </div>
+        <button class="schedule-btn" id="scheduleBtn">
+          <span>📅</span><span>智能排课</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ============ 主区：左右 5:1 ============ -->
+    <main class="main-split">
+      <!-- 左侧：日历 -->
+      <section class="calendar-zone">
+        <div class="calendar-container">
+          <div class="calendar-header">
+            <div class="calendar-title" id="calendarTitle">—</div>
+            <div class="calendar-subtitle" id="calendarSubtitle">—</div>
+            <div class="calendar-nav">
+              <button class="nav-btn" id="prevMonthBtn" title="上一月">‹</button>
+              <button class="nav-btn" id="todayBtn" title="今天">●</button>
+              <button class="nav-btn" id="nextMonthBtn" title="下一月">›</button>
+            </div>
+          </div>
+          <div class="calendar-body">
+            <div class="weekdays">
+              <div class="weekday">日</div>
+              <div class="weekday">一</div>
+              <div class="weekday">二</div>
+              <div class="weekday">三</div>
+              <div class="weekday">四</div>
+              <div class="weekday">五</div>
+              <div class="weekday">六</div>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 右侧：汇总面板 -->
+      <aside class="summary-zone">
+        <!-- 整合区 1：空闲时间表（上传 + 列表） -->
+        <section class="tree-section integrated-section" data-section="availability">
+          <div class="tree-section__header" data-action="toggle-section" data-key="availability">
+            <span class="tree-section__toggle" id="toggle-availability">▼</span>
+            <span class="tree-section__title">⏰ 空闲时间表</span>
+            <span class="tree-section__count" id="availabilityListCount">0 条</span>
+            <span class="section-upload">
+              <div class="upload-btn-wrapper">
+                <button class="upload-btn upload-btn--sm" type="button">
+                  <span>📁</span><span>上传</span>
+                </button>
+                <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
+              </div>
+            </span>
+          </div>
+          <div class="tree-section__body">
+            <div class="upload-hint-bar">
+              <span class="upload-status info" id="uploadStatus">师资名称 · 日期 · 开始时间 · 结束时间</span>
+            </div>
+            <div id="availabilityTreeContent">
+              <div class="data-list-empty">暂无空闲时间数据，请上传文件</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 整合区 2：课程体系表（上传 + 列表） -->
+        <section class="tree-section integrated-section" data-section="courseSystem">
+          <div class="tree-section__header" data-action="toggle-section" data-key="courseSystem">
+            <span class="tree-section__toggle" id="toggle-courseSystem">▼</span>
+            <span class="tree-section__title">📋 课程体系表</span>
+            <span class="tree-section__count" id="courseSystemCount">0 条</span>
+            <span class="section-upload">
+              <div class="upload-btn-wrapper">
+                <button class="upload-btn upload-btn--sm" type="button">
+                  <span>📁</span><span>上传</span>
+                </button>
+                <input type="file" id="courseSystemFileInput" accept=".xlsx,.xls,.csv" />
+              </div>
+            </span>
+          </div>
+          <div class="tree-section__body">
+            <div class="upload-hint-bar">
+              <span class="upload-status info" id="courseSystemStatus">班型 · 课程名称 · 师资名称 · 时长(分钟)</span>
+            </div>
+            <div id="courseSystemTreeContent">
+              <div class="course-system-empty">请上传课程体系表 Excel 文件</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 折叠区 3：排课结果 -->
+        <section class="tree-section" data-section="scheduled">
+          <div class="tree-section__header" data-action="toggle-section" data-key="scheduled">
+            <span class="tree-section__toggle" id="toggle-scheduled">▼</span>
+            <span class="tree-section__title">📅 排课结果</span>
+            <span class="tree-section__count" id="scheduledListCount">0 条</span>
+            <span class="section-export">
+              <button class="export-btn" type="button" data-action="export-scheduled" id="exportScheduledBtn">
+                <span>📤</span><span>导出Excel</span>
+              </button>
+            </span>
+          </div>
+          <div class="tree-section__body" id="scheduledTreeContent">
+            <div class="data-list-empty">暂无排课数据</div>
+          </div>
+        </section>
+      </aside>
+    </main>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

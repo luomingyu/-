@@ -1,0 +1,101 @@
+/* ===== 课程体系表（原 side-panel，现置于输入区中列） ===== */
+.course-system-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 10px;
+  background: #F8FAFC;
+  border-radius: 8px;
+}
+
+.course-system-stat-item {
+  flex: 1;
+  text-align: center;
+}
+
+.course-system-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.course-system-stat-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.unscheduled-stat .course-system-stat-value {
+  color: #DC2626;
+}
+
+.course-system-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.course-system-table th,
+.course-system-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.course-system-table th {
+  position: sticky;
+  top: 0;
+  background: #F1F5F9;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.course-system-table td {
+  color: var(--text);
+}
+
+.course-system-table tr.row-unscheduled {
+  background: #FEF2F2;
+}
+
+.course-system-table tr.row-unscheduled td {
+  color: #9CA3AF;
+  text-decoration: line-through;
+}
+
+.status-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.status-tag.success {
+  background: #ECFDF5;
+  color: #065F46;
+}
+
+.status-tag.error {
+  background: #FEF2F2;
+  color: #DC2626;
+}
+
+.course-system-empty {
+  text-align: center;
+  padding: 30px 15px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* 表格横向滚动容器（窄列适配，5:1 右侧面板） */
+.course-system-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 6px;
+}
+
+.course-system-table {
+  min-width: 420px;
+}
