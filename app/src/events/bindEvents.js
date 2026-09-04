@@ -4,10 +4,11 @@ import {
   addAvailabilityFile, addCourseSystemFile, setUploadStatus, runSchedule,
   deleteAvailabilityFile, deleteCourseSystemFile,
   deleteAvailabilityItem, deleteCourseSystemItem, deleteScheduledCourse,
-  toggleSection, toggleFile, setSelectedClass
+  toggleSection, toggleFile, setSelectedClass, setSelectedTeacher
 } from '../state/store.js';
 import { parseAvailabilitySheet, parseCourseSystemSheet } from '../utils/excelParser.js';
-import { exportScheduledToExcel } from '../utils/excelExporter.js';
+import { exportScheduledToExcel, exportAvailabilityToExcel } from '../utils/excelExporter.js';
+import { parseRequirements, generateAvailability } from '../utils/availabilityGenerator.js';
 
 export function bindEvents() {
   // 初始化年月选择器
@@ -44,8 +45,13 @@ export function bindEvents() {
     setSelectedClass(e.target.value);
   });
 
-  // 阻止上传按钮、导出按钮的点击冒泡到 header（避免误触折叠）
-  document.querySelectorAll('.upload-btn-wrapper, .section-export').forEach(wrapper => {
+  // 师资筛选变更事件
+  document.getElementById('teacherFilter')?.addEventListener('change', (e) => {
+    setSelectedTeacher(e.target.value);
+  });
+
+  // 阻止上传按钮、示例表、导出按钮的点击冒泡到 header（避免误触折叠）
+  document.querySelectorAll('.upload-btn-wrapper, .example-download, .section-export').forEach(wrapper => {
     wrapper.addEventListener('click', e => e.stopPropagation());
   });
 
@@ -70,9 +76,14 @@ export function bindEvents() {
     if (!file) return;
     setUploadStatus('courseSystem', '正在解析文件...', 'info');
     try {
-      const list = await parseCourseSystemSheet(file);
+      const { list, warnings } = await parseCourseSystemSheet(file);
       addCourseSystemFile(file.name, list);
-      setUploadStatus('courseSystem', `成功导入 ${list.length} 条（来自 ${file.name}）`, 'success');
+      if (warnings && warnings.length > 0) {
+        // v5.73：未识别班级已保留原值继续排课（宽松模式），黄色警告提示
+        setUploadStatus('courseSystem', `成功导入 ${list.length} 条（来自 ${file.name}）；⚠ ${warnings.join('；')}`, 'warning');
+      } else {
+        setUploadStatus('courseSystem', `成功导入 ${list.length} 条（来自 ${file.name}）`, 'success');
+      }
     } catch (error) {
       setUploadStatus('courseSystem', `导入失败：${error.message}`, 'error');
     }
@@ -95,6 +106,89 @@ export function bindEvents() {
     const y = month.getFullYear();
     const m = String(month.getMonth() + 1).padStart(2, '0');
     exportScheduledToExcel(state.courses, `排课结果_${y}年${m}月.xlsx`);
+  });
+
+  // 导出排课报告（.md）：优先导出最近一次排课的报告；若已多次排课，可保留历史报告在服务器
+  document.getElementById('exportReportBtn')?.addEventListener('click', () => {
+    const state = getState();
+    const reports = state.scheduleReports || [];
+    if (reports.length === 0) {
+      alert('暂无排课报告，请先执行「智能排课」');
+      return;
+    }
+    const latest = reports[reports.length - 1];
+    downloadTextFile(latest.fileName, latest.content);
+  });
+
+  // ===== 空闲时间表「生成」模态框 =====
+  const availabilityModal = document.getElementById('availabilityModal');
+
+  // 打开模态框（生成页面）；stopPropagation 避免冒泡触发区块折叠
+  document.getElementById('genAvailabilityBtn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    availabilityModal?.classList.remove('hidden');
+  });
+
+  // 关闭：关闭按钮 / 点击遮罩
+  document.getElementById('availabilityModalClose')?.addEventListener('click', () => {
+    availabilityModal?.classList.add('hidden');
+  });
+  availabilityModal?.addEventListener('click', (e) => {
+    if (e.target === availabilityModal) availabilityModal.classList.add('hidden');
+  });
+
+  // Esc 键关闭
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') availabilityModal?.classList.add('hidden');
+  });
+
+  // 输出 Excel：按「底层要求（每天 09:00-12:00、14:00-23:00）+ 框内要求（师资约束）」生成空闲时间表并导出
+  document.getElementById('availabilityExportExcelBtn')?.addEventListener('click', () => {
+    const state = getState();
+    const note = document.getElementById('availabilityModalNote')?.value.trim() || '';
+    const requirements = parseRequirements(note);
+    if (requirements.length === 0) {
+      alert('请先填写排课要求，格式：师资名，年月，每周二18点后不排课，周末不排课');
+      return;
+    }
+    const month = state.currentDate;
+    const y = month.getFullYear();
+    const m = month.getMonth();
+    const rows = generateAvailability({ year: y, month: m, requirements });
+    if (rows.length === 0) {
+      alert('未生成任何空闲时间，请检查排课要求');
+      return;
+    }
+    exportAvailabilityToExcel(rows, `空闲时间表_${y}年${m + 1}月.xlsx`);
+  });
+
+  // ===== 直接录入：按排课要求生成空闲时间表并直接录入 =====
+  document.getElementById('availabilityDirectBtn')?.addEventListener('click', () => {
+    const state = getState();
+    const note = document.getElementById('availabilityModalNote')?.value.trim() || '';
+    const requirements = parseRequirements(note);
+    if (requirements.length === 0) {
+      alert('请先填写排课要求，格式：师资名，年月，每周二18点后不排课，周末不排课');
+      return;
+    }
+    const month = state.currentDate;
+    const y = month.getFullYear();
+    const m = month.getMonth();
+    const rows = generateAvailability({ year: y, month: m, requirements });
+    if (rows.length === 0) {
+      alert('未生成任何空闲时间，请检查排课要求');
+      return;
+    }
+    // 文件名：师资-年月-师资空闲时间表（如：罗明宇-2026年9月-师资空闲时间表；多名师资/多月用顿号分隔）
+    const teacherSet = new Set(rows.map(r => r.teacher));
+    const monthSet = new Set(rows.map(r => {
+      const [ry, rm] = r.date.split('-');
+      return `${ry}年${parseInt(rm, 10)}月`;
+    }));
+    const fileName = `${[...teacherSet].join('、')}-${[...monthSet].join('、')}-师资空闲时间表`;
+    addAvailabilityFile(fileName, rows);
+    setUploadStatus('availability', `已生成并录入 ${rows.length} 条空闲时间（${fileName}）`, 'success');
+    availabilityModal?.classList.add('hidden');
   });
 
   // 统一事件委托：折叠切换 + 删除联动
@@ -199,4 +293,17 @@ function onMonthSelectorChange() {
   const newDate = new Date(year, month, 1);
   setCurrentDate(newDate);
   setSelectedDate(newDate);
+}
+
+/** 下载文本文件（utf-8，用于导出 Markdown 排课报告） */
+function downloadTextFile(fileName, content) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

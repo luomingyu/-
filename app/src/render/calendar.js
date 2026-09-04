@@ -126,7 +126,7 @@ function createDayCell(dayData, state) {
     const card = document.createElement('div');
     card.className = getCourseCardClass(course.type);
     const displayClass = course.classType || '';
-    const displayTeacher = (course.teacher || '').replace('老师', '');
+    const displayTeacher = course.teacher || '';
     card.innerHTML = `
       ${displayClass ? `<div class="course-class">${escapeHtml(displayClass)}</div>` : ''}
       <div class="course-name">${escapeHtml(course.name)}</div>

@@ -90,7 +90,7 @@ export function renderScheduledList(state) {
   filteredList.forEach(course => {
     const originalIndex = state.courses.indexOf(course);
     const displayName = course.name || '未命名课程';
-    const displayTeacher = (course.teacher || '').replace('老师', '');
+    const displayTeacher = course.teacher || '';
     const displayClass = course.classType || '';
     const classTag = displayClass ? `<span class="scheduled-class-tag">${escapeHtml(displayClass)}</span>` : '';
     html += `
@@ -119,13 +119,33 @@ export function renderStatus(state) {
   updateStatusEl('uploadStatus', state.uploadStatus.availability);
   updateStatusEl('courseSystemStatus', state.uploadStatus.courseSystem);
 
-  // 排课状态显示在师资上传状态位置（与原系统一致）
+  // 排课状态显示在导出按钮下方
   const scheduleStatus = state.scheduleStatus;
   if (scheduleStatus && scheduleStatus.text) {
-    const el = document.getElementById('uploadStatus');
+    const el = document.getElementById('scheduleStatus');
     if (el) {
-      el.className = `upload-status ${scheduleStatus.kind || 'info'}`;
+      el.className = `schedule-status ${scheduleStatus.kind || 'info'}`;
       el.textContent = scheduleStatus.text;
+    }
+  }
+
+  // 最近排课报告（每次新排课自动更新，内容与最新排课逻辑一致，v5.38）
+  const reports = state.scheduleReports || [];
+  const reportEl = document.getElementById('scheduleReportInfo');
+  if (reportEl) {
+    if (reports.length === 0) {
+      reportEl.className = 'schedule-status info';
+      reportEl.textContent = '暂无排课报告，执行「智能排课」后自动生成';
+    } else {
+      const latest = reports[reports.length - 1];
+      let genText = '';
+      if (latest.generatedAt) {
+        const d = new Date(latest.generatedAt);
+        const p = n => String(n).padStart(2, '0');
+        genText = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+      }
+      reportEl.className = 'schedule-status success';
+      reportEl.textContent = `最近报告：${latest.fileName}（${genText} · 算法 ${latest.algorithmVersion || '-'} · 成功 ${latest.successCount ?? '-'} 门 / 失败 ${latest.failedCount ?? '-'} 门）`;
     }
   }
 }

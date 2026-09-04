@@ -6,17 +6,20 @@
 }
 
 .upload-btn {
-  padding: 8px 16px;
+  padding: 6px 14px;
   background: var(--primary);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  white-space: nowrap;
+  height: 32px;
   transition: all 0.2s ease;
 }
 
@@ -27,6 +30,36 @@
 }
 
 .upload-btn:active {
+  transform: translateY(0);
+}
+
+/* 示例表下载按钮（与上传按钮统一风格） */
+.example-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  height: 32px;
+  transition: all 0.2s ease;
+}
+
+.example-download:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
+.example-download:active {
   transform: translateY(0);
 }
 
@@ -58,30 +91,40 @@
   color: #DC2626;
 }
 
+.upload-status.warning {
+  background: #FFFBEB;
+  color: #B45309;
+}
+
 .upload-status.info {
   background: #EFF6FF;
   color: #1D4ED8;
 }
 
+/* 智能排课按钮：风格与其他按钮统一，大小保持不变 */
 .schedule-btn {
   padding: 10px 20px;
-  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+  background: var(--primary);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  white-space: nowrap;
+  height: 40px;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  box-shadow: var(--shadow);
 }
 
 .schedule-btn:hover {
+  background: var(--primary-dark);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  box-shadow: var(--shadow-lg);
 }
 
 .schedule-btn:active {
@@ -223,13 +266,45 @@
 
 .tree-section__header {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   padding: 10px 14px;
   cursor: pointer;
   user-select: none;
   border-bottom: 1px solid var(--border);
   transition: background 0.15s;
+}
+
+/* 标题行（第 1 行：折叠箭头 + 标题） */
+.tree-section__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* 信息行（第 2 行：条数 + 操作按钮） */
+.tree-section__meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 状态行（第 3 行：导入/排课成功消息） */
+.tree-section__status-row {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+}
+
+.tree-section__status-row .upload-status,
+.tree-section__status-row .schedule-status {
+  display: block;
+  width: 100%;
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  text-align: center;
 }
 
 .tree-section__header:hover {
@@ -376,13 +451,9 @@
 .section-upload {
   margin-left: auto;
   flex-shrink: 0;
-}
-
-.upload-btn--sm {
-  padding: 4px 10px;
-  font-size: 12px;
-  border-radius: 6px;
-  gap: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .upload-hint-bar {
@@ -403,35 +474,59 @@
   padding-top: 0;
 }
 
-.integrated-section .tree-section__count {
-  margin-right: 8px;
-}
-
 /* ===== 导出按钮 ===== */
 .section-export {
   margin-left: auto;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 排课成功/失败消息（第 3 行，横幅样式） */
+.schedule-status {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.schedule-status.success {
+  background: #ECFDF5;
+  color: #065F46;
+}
+
+.schedule-status.error {
+  background: #FEF2F2;
+  color: #DC2626;
+}
+
+.schedule-status.info {
+  background: #EFF6FF;
+  color: #1D4ED8;
 }
 
 .export-btn {
-  padding: 4px 10px;
-  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  padding: 6px 14px;
+  background: var(--primary);
   color: white;
   border: none;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
-  transition: all 0.2s ease;
+  justify-content: center;
+  gap: 6px;
   white-space: nowrap;
+  height: 32px;
+  transition: all 0.2s ease;
 }
 
 .export-btn:hover {
+  background: var(--primary-dark);
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+  box-shadow: var(--shadow);
 }
 
 .export-btn:active {
@@ -443,4 +538,99 @@
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+/* ===== 模态框（生成页面） ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-box {
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.25);
+  width: 440px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.modal-box__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-box__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.modal-box__close {
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.modal-box__close:hover {
+  background: #F1F5F9;
+  color: var(--text);
+}
+
+.modal-box__body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-box__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.modal-box__textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  color: var(--text);
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.modal-box__textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.modal-box__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }

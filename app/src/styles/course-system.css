@@ -97,5 +97,10 @@
 }
 
 .course-system-table {
-  min-width: 420px;
+  min-width: 480px;
+}
+
+/* 起始/终止日期未填写时的占位 */
+.cell-muted {
+  color: #CBD5E1;
 }

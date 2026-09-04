@@ -9,20 +9,37 @@
   <div class="app-layout">
     <!-- ============ 顶部条 ============ -->
     <header class="top-bar">
-      <h1 class="app-title">📅 月度排课系统</h1>
+      <div class="top-bar__title-group">
+        <h1 class="app-title">📅 月度排课系统</h1>
+        <span class="algorithm-badge" id="algorithmVersionBadge" title="排课算法版本"></span>
+        <a class="usage-link" href="https://gaotuedu.feishu.cn/docx/XiCsdiLDnoM6uoxIaNGcg8Lankf" target="_blank" rel="noopener noreferrer" title="打开月度排课系统使用说明（飞书文档）">月度排课系统使用说明 ↗</a>
+      </div>
       <div class="top-bar__actions">
-        <div class="month-selector">
-          <select id="yearSelect" class="month-selector__select"></select>
-          <select id="monthSelect" class="month-selector__select"></select>
+        <!-- 排课部分：智能排课 + 排课年、月 -->
+        <div class="action-group">
+          <span class="action-group__label">排课</span>
+          <div class="month-selector">
+            <select id="yearSelect" class="month-selector__select" title="排课年份"></select>
+            <select id="monthSelect" class="month-selector__select" title="排课月份"></select>
+          </div>
+          <button class="schedule-btn" id="scheduleBtn">
+            <span>📅</span><span>智能排课</span>
+          </button>
         </div>
-        <div class="class-filter">
-          <select id="classFilter" class="month-selector__select" title="选择班级筛选课表">
-            <option value="">全部班级</option>
-          </select>
+        <!-- 查看部分：班级查看 + 师资查看 -->
+        <div class="action-group">
+          <span class="action-group__label">查看</span>
+          <div class="class-filter">
+            <select id="classFilter" class="month-selector__select" title="选择班级筛选课表">
+              <option value="">全部班级</option>
+            </select>
+          </div>
+          <div class="teacher-filter">
+            <select id="teacherFilter" class="month-selector__select" title="选择师资筛选空闲时间与课表">
+              <option value="">全部师资</option>
+            </select>
+          </div>
         </div>
-        <button class="schedule-btn" id="scheduleBtn">
-          <span>📅</span><span>智能排课</span>
-        </button>
       </div>
     </header>
 
@@ -60,22 +77,32 @@
         <!-- 整合区 1：空闲时间表（上传 + 列表） -->
         <section class="tree-section integrated-section" data-section="availability">
           <div class="tree-section__header" data-action="toggle-section" data-key="availability">
-            <span class="tree-section__toggle" id="toggle-availability">▼</span>
-            <span class="tree-section__title">⏰ 空闲时间表</span>
-            <span class="tree-section__count" id="availabilityListCount">0 条</span>
-            <span class="section-upload">
-              <div class="upload-btn-wrapper">
-                <button class="upload-btn upload-btn--sm" type="button">
-                  <span>📁</span><span>上传</span>
+            <div class="tree-section__title-row">
+              <span class="tree-section__toggle" id="toggle-availability">▼</span>
+              <span class="tree-section__title">⏰ 空闲时间表</span>
+              <span class="tree-section__count" id="availabilityListCount">0 条</span>
+            </div>
+            <div class="tree-section__meta-row">
+              <span class="section-upload">
+                <div class="upload-btn-wrapper">
+                  <button class="upload-btn" type="button">
+                    <span>📁</span><span>上传</span>
+                  </button>
+                  <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
+                </div>
+                <a class="example-download" href="示例文件/空闲时间表.xlsx" download="空闲时间表.xlsx" title="下载示例表（师资名称 · 日期 · 开始时间 · 结束时间）">
+                  <span>📄</span><span>示例表</span>
+                </a>
+                <button class="export-btn" type="button" id="genAvailabilityBtn" title="生成空闲时间表（按排课要求输出 Excel 或直接录入空闲时间表）">
+                  <span>🛠</span><span>生成</span>
                 </button>
-                <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
-              </div>
-            </span>
-          </div>
-          <div class="tree-section__body">
-            <div class="upload-hint-bar">
+              </span>
+            </div>
+            <div class="tree-section__status-row">
               <span class="upload-status info" id="uploadStatus">师资名称 · 日期 · 开始时间 · 结束时间</span>
             </div>
+          </div>
+          <div class="tree-section__body">
             <div id="availabilityTreeContent">
               <div class="data-list-empty">暂无空闲时间数据，请上传文件</div>
             </div>
@@ -85,22 +112,29 @@
         <!-- 整合区 2：课程体系表（上传 + 列表） -->
         <section class="tree-section integrated-section" data-section="courseSystem">
           <div class="tree-section__header" data-action="toggle-section" data-key="courseSystem">
-            <span class="tree-section__toggle" id="toggle-courseSystem">▼</span>
-            <span class="tree-section__title">📋 课程体系表</span>
-            <span class="tree-section__count" id="courseSystemCount">0 条</span>
-            <span class="section-upload">
-              <div class="upload-btn-wrapper">
-                <button class="upload-btn upload-btn--sm" type="button">
-                  <span>📁</span><span>上传</span>
-                </button>
-                <input type="file" id="courseSystemFileInput" accept=".xlsx,.xls,.csv" />
-              </div>
-            </span>
+            <div class="tree-section__title-row">
+              <span class="tree-section__toggle" id="toggle-courseSystem">▼</span>
+              <span class="tree-section__title">📋 课程体系表</span>
+              <span class="tree-section__count" id="courseSystemCount">0 条</span>
+            </div>
+            <div class="tree-section__meta-row">
+              <span class="section-upload">
+                <div class="upload-btn-wrapper">
+                  <button class="upload-btn" type="button">
+                    <span>📁</span><span>上传</span>
+                  </button>
+                  <input type="file" id="courseSystemFileInput" accept=".xlsx,.xls,.csv" />
+                </div>
+                <a class="example-download" href="示例文件/课程体系表.xlsx" download="课程体系表.xlsx" title="下载示例表（班型 · 课程名称 · 师资名称 · 时长(分钟) · 起始日期 · 终止日期）">
+                  <span>📄</span><span>示例表</span>
+                </a>
+              </span>
+            </div>
+            <div class="tree-section__status-row">
+              <span class="upload-status info" id="courseSystemStatus">班型 · 课程名称 · 师资名称 · 时长(分钟) · 起始日期 · 终止日期</span>
+            </div>
           </div>
           <div class="tree-section__body">
-            <div class="upload-hint-bar">
-              <span class="upload-status info" id="courseSystemStatus">班型 · 课程名称 · 师资名称 · 时长(分钟)</span>
-            </div>
             <div id="courseSystemTreeContent">
               <div class="course-system-empty">请上传课程体系表 Excel 文件</div>
             </div>
@@ -110,14 +144,27 @@
         <!-- 折叠区 3：排课结果 -->
         <section class="tree-section" data-section="scheduled">
           <div class="tree-section__header" data-action="toggle-section" data-key="scheduled">
-            <span class="tree-section__toggle" id="toggle-scheduled">▼</span>
-            <span class="tree-section__title">📅 排课结果</span>
-            <span class="tree-section__count" id="scheduledListCount">0 条</span>
-            <span class="section-export">
+            <div class="tree-section__title-row">
+              <span class="tree-section__toggle" id="toggle-scheduled">▼</span>
+              <span class="tree-section__title">📅 排课结果</span>
+              <span class="tree-section__count" id="scheduledListCount">0 条</span>
+            </div>
+            <div class="tree-section__meta-row">
+              <span class="section-export">
               <button class="export-btn" type="button" data-action="export-scheduled" id="exportScheduledBtn">
                 <span>📤</span><span>导出Excel</span>
               </button>
+              <button class="export-btn" type="button" id="exportReportBtn" title="导出最近一次排课生成的 Markdown 排课报告（含师资次序、排课逻辑、师资-班级空闲时间表）">
+                <span>📄</span><span>导出报告(.md)</span>
+              </button>
             </span>
+            </div>
+            <div class="tree-section__status-row">
+              <span class="schedule-status" id="scheduleStatus"></span>
+            </div>
+            <div class="tree-section__status-row">
+              <span class="schedule-status" id="scheduleReportInfo"></span>
+            </div>
           </div>
           <div class="tree-section__body" id="scheduledTreeContent">
             <div class="data-list-empty">暂无排课数据</div>
@@ -127,5 +174,33 @@
     </main>
   </div>
   <script type="module" src="/src/main.js"></script>
+
+  <!-- 空闲时间表生成模态框（生成页面，含备注说明对话框 + 输出 Excel 按钮） -->
+  <div class="modal-overlay hidden" id="availabilityModal">
+    <div class="modal-box">
+      <div class="modal-box__header">
+        <span class="modal-box__title">🛠 生成空闲时间表页面</span>
+        <button class="modal-box__close" type="button" id="availabilityModalClose" title="关闭">✕</button>
+      </div>
+      <div class="modal-box__body">
+        <label class="modal-box__label" for="availabilityModalNote">排课要求（每行一个师资）</label>
+        <textarea class="modal-box__textarea" id="availabilityModalNote" rows="6" placeholder="每行格式：师资名，年月，约束1，约束2，约束3…
+示例：
+王喆，2026年9月，每周二18点后不排课，周末不排课
+石磊，2026年9月，周三不排课，周六14:00后不排课，11日不排课
+罗明宇，2026年9月，11日不排课，周末不排课，周一上午9-12点不排课，周五晚上17点后不排课
+
+年月可省略（用当前选中月份）；底层默认可排时段：每天 09:00-12:00、14:00-23:00"></textarea>
+        <div class="modal-box__actions">
+          <button class="export-btn" type="button" id="availabilityExportExcelBtn" title="按底层要求与框内要求生成空闲时间表并导出为 Excel">
+            <span>📤</span><span>输出Excel</span>
+          </button>
+          <button class="export-btn" type="button" id="availabilityDirectBtn" title="按排课要求生成空闲时间表并直接录入空闲时间表">
+            <span>✍️</span><span>直接录入</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

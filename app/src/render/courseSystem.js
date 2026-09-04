@@ -76,6 +76,9 @@ export function renderCourseSystem(state) {
           <th>课程</th>
           <th>师资</th>
           <th>时长</th>
+          <th>起始</th>
+          <th>终止</th>
+          <th>合班备注</th>
           ${showStatusCol ? '<th>状态</th>' : ''}
           <th>操作</th>
         </tr></thead>
@@ -83,6 +86,8 @@ export function renderCourseSystem(state) {
       `;
       file.items.forEach(item => {
         const rowClass = item.scheduled === false ? ' class="row-unscheduled"' : '';
+        const startCell = item.startDate ? escapeHtml(item.startDate.slice(5)) : '<span class="cell-muted">—</span>';
+        const endCell = item.endDate ? escapeHtml(item.endDate.slice(5)) : '<span class="cell-muted">—</span>';
         let statusCell = '';
         if (showStatusCol) {
           if (item.scheduled === true) {
@@ -99,6 +104,9 @@ export function renderCourseSystem(state) {
             <td>${escapeHtml(item.courseName)}</td>
             <td>${escapeHtml(item.teacher)}</td>
             <td>${escapeHtml(String(item.duration))}</td>
+            <td>${startCell}</td>
+            <td>${endCell}</td>
+            <td>${item.mergeNote ? escapeHtml(item.mergeNote) : ''}</td>
             ${statusCell}
             <td><button class="delete-btn" data-action="delete-course-item" data-item-id="${item.itemId}">删除</button></td>
           </tr>

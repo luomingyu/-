@@ -1,7 +1,11 @@
 // 集中状态管理：pub/sub + 细粒度 action
 // 数据模型：真实存储为「按文件分组」，派生扁平缓存供 scheduler/calendar/selectors 使用
 // 联动删除改用稳定 itemId（替代 index/id-100）
-import { generateSchedule } from '../scheduler/index.js';
+// v5.20：业务数据（空闲表/课程表/排课结果）通过本机服务器持久化到磁盘，
+//        局域网内其他人通过链接访问时，看到的是同一份数据（见 persist.js）
+import { runSchedulePipeline } from '../scheduler/pipeline.js';
+import { ALGORITHM_VERSION } from '../scheduler/report.js';
+import { loadFromServer, schedulePersist } from './persist.js';
 
 let _fileIdCounter = 0;
 let _itemIdCounter = 0;
@@ -12,6 +16,7 @@ const initialState = {
   currentDate: new Date(),
   selectedDate: new Date(),
   selectedClass: '',          // 班级筛选：空字符串=全部班级
+  selectedTeacher: '',        // 师资筛选：空字符串=全部师资
   // 真实存储：按文件分组
   availabilityFiles: [],      // { id, fileName, uploadedAt, items: [{ itemId, teacher, date, startTime, endTime }] }
   courseSystemFiles: [],      // { id, fileName, uploadedAt, items: [{ itemId, classType, courseName, teacher, duration, scheduled }] }
@@ -19,6 +24,7 @@ const initialState = {
   availabilityData: [],
   courseSystemData: [],
   courses: [],                // { id, name, date, startTime, endTime, teacher, type, sourceItemId }
+  scheduleReports: [],        // 每次排课生成的 Markdown 报告快照（含师资-班级空闲时间表）
   // UI 折叠状态
   ui: {
     sectionCollapsed: { availability: false, courseSystem: false, scheduled: false },
@@ -39,10 +45,17 @@ export function getState() {
   return state;
 }
 
-/** 浅合并并通知订阅者 */
-export function setState(patch) {
-  state = { ...state, ...patch };
+/** 浅合并并通知订阅者；业务数据有变化时自动持久化到服务器磁盘 */
+export function setState(patch, opts = {}) {
+  const next = { ...state, ...patch };
+  // 检测业务数据（空闲表/课程表/排课结果）是否变化，变化则交给服务器落盘
+  // UI 状态（折叠、选中日期等）不属于业务数据，不触发写入
+  const bizChanged = opts.persist !== false && isBizDataChanged(state, next);
+  state = next;
   notify();
+  if (bizChanged) {
+    schedulePersist(state.availabilityFiles, state.courseSystemFiles, state.courses, state.scheduleReports);
+  }
 }
 
 /** 订阅状态变更，返回取消订阅函数 */
@@ -55,7 +68,7 @@ function notify() {
   listeners.forEach(fn => fn(state));
 }
 
-function setStatus(key, text, kind) {
+export function setStatus(key, text, kind) {
   if (key === 'schedule') {
     setState({ scheduleStatus: { text, kind } });
     return;
@@ -69,6 +82,14 @@ function setStatus(key, text, kind) {
 const rederiveAvailability = (files) => files.flatMap(f => f.items);
 const rederiveCourseSystem = (files) => files.flatMap(f => f.items);
 
+// 持久化范围：只有这几块属于需要落盘的"业务数据"
+const BIZ_KEYS = ['availabilityFiles', 'courseSystemFiles', 'courses', 'scheduleReports'];
+
+/** 前后两份状态中，业务数据是否发生了变化（序列化比对，数据量小足够快） */
+function isBizDataChanged(prev, next) {
+  return BIZ_KEYS.some(k => JSON.stringify(prev[k]) !== JSON.stringify(next[k]));
+}
+
 /** 给解析出的条目附加唯一 itemId */
 function withItemIds(items) {
   return items.map(it => ({ ...it, itemId: nextItemId() }));
@@ -78,6 +99,7 @@ function withItemIds(items) {
 export function setCurrentDate(date) { setState({ currentDate: date }); }
 export function setSelectedDate(date) { setState({ selectedDate: date }); }
 export function setSelectedClass(cls) { setState({ selectedClass: cls || '' }); }
+export function setSelectedTeacher(teacher) { setState({ selectedTeacher: teacher || '' }); }
 export function setUploadStatus(key, text, kind) { setStatus(key, text, kind); }
 
 // ============ 文件累积 Actions ============
@@ -195,29 +217,54 @@ export function deleteScheduledCourse(index) {
 
 // ============ 排课 ============
 
-/** 执行智能排课 */
-export function runSchedule() {
-  const result = generateSchedule(state);
-  if (!result.ok) {
-    setStatus('schedule', result.error, 'error');
-    return;
+/**
+ * 执行智能排课（方案 B：排课以服务器执行为准，服务器不可用时本地兜底）。
+ * 前后端共用同一排课管线（runSchedulePipeline），保证结果一致。
+ * @returns {Promise<boolean>} 是否排课成功
+ */
+export async function runSchedule() {
+  // 1. 优先请求服务器执行排课（POST /api/schedule）
+  let result = null;
+  try {
+    const res = await fetch('/api/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        availabilityFiles: state.availabilityFiles,
+        courseSystemFiles: state.courseSystemFiles,
+        currentDate: state.currentDate
+      })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const payload = await res.json();
+    if (payload && typeof payload.ok === 'boolean') {
+      result = payload; // 服务器为准：排课成功或失败都采用其结论
+    } else {
+      throw new Error('服务器返回格式异常');
+    }
+  } catch (err) {
+    console.warn('[排课] 服务器执行不可用，回退本地执行:', err.message);
   }
 
-  // result.courseSystemData 是扁平数组（含 itemId + scheduled），按 itemId 回写到文件 items
-  const scheduledMap = new Map(result.courseSystemData.map(it => [it.itemId, it.scheduled]));
-  const courseSystemFiles = state.courseSystemFiles.map(f => ({
-    ...f,
-    items: f.items.map(it => ({
-      ...it,
-      scheduled: scheduledMap.has(it.itemId) ? scheduledMap.get(it.itemId) : it.scheduled
-    }))
-  }));
-  const courseSystemData = rederiveCourseSystem(courseSystemFiles);
+  // 2. 服务器不可用时本地兜底（同一管线，结果一致）
+  if (!result) {
+    result = runSchedulePipeline({
+      availabilityFiles: state.availabilityFiles,
+      courseSystemFiles: state.courseSystemFiles,
+      currentDate: state.currentDate
+    });
+  }
+
+  if (!result.ok) {
+    setStatus('schedule', result.error, 'error');
+    return false;
+  }
 
   setState({
     courses: result.courses,
-    courseSystemFiles,
-    courseSystemData
+    courseSystemFiles: result.courseSystemFiles,
+    courseSystemData: rederiveCourseSystem(result.courseSystemFiles),
+    scheduleReports: result.scheduleReports
   });
 
   // 输出诊断信息
@@ -225,18 +272,15 @@ export function runSchedule() {
   if (diag) {
     console.group('📊 排课诊断报告');
     if (diag.sheetStats && diag.sheetStats.length > 0) {
-      console.log('子表统计:');
+      console.log('子表统计（按课程数量降序排课）:');
       diag.sheetStats.forEach(s => {
-        console.log(`  ${s.sheetName}: ${s.scheduled}/${s.totalCourses} 成功 (师资: ${s.teachers.join(', ')})`);
+        console.log(`  ${s.sheetName}: ${s.scheduled}/${s.totalCourses} 成功 (对齐 ${s.aligned}, 失败 ${s.failed}, 师资: ${s.teachers.join(', ')})`);
       });
     }
     console.log('排课顺序:', diag.schedulingOrder.join(' → '));
-    console.log('师资排课情况（按难易程度降序）:');
+    console.log('师资排课情况:');
     diag.teacherStats.forEach(s => {
-      const diffStr = s.difficultyPercent === null
-        ? '∞ (无空闲时间)'
-        : s.difficultyPercent + '%';
-      console.log(`  ${s.teacher}: ${s.scheduled}/${s.totalCourses} 成功 (可用天数: ${s.availableDates}, 难易程度: ${diffStr}, 课程需求: ${s.courseDemandMinutes}分钟 / 空闲: ${s.availabilityMinutes}分钟)`);
+      console.log(`  ${s.teacher}: ${s.scheduled}/${s.totalCourses} 成功 (可用天数: ${s.availableDates})`);
     });
     console.log('班级分布:');
     diag.classStats.forEach(s => {
@@ -250,6 +294,7 @@ export function runSchedule() {
   } else {
     setStatus('schedule', `排课完成！成功 ${result.successCount} 门，失败 ${result.failedCount} 门`, 'error');
   }
+  return true;
 }
 
 // ============ 折叠 UI ============
@@ -268,4 +313,51 @@ export function toggleFile(fileId) {
     [fileId]: !state.ui.fileCollapsed[fileId]
   };
   setState({ ui: { ...state.ui, fileCollapsed } });
+}
+
+// ============ 启动时从服务器加载历史数据 ============
+
+/**
+ * 应用启动时调用：若本机服务器可用，把磁盘上保存的业务数据恢复到内存。
+ * @returns {Promise<{loaded: boolean, upgraded: string|null}>}
+ *   loaded  是否成功从服务器加载到数据
+ *   upgraded 若后端数据算法版本落后于当前代码，自动重排后返回最新算法版本；否则为 null
+ */
+export async function hydrateFromServer() {
+  const data = await loadFromServer();
+  if (!data) return { loaded: false, upgraded: null };
+
+  const availabilityFiles = Array.isArray(data.availabilityFiles) ? data.availabilityFiles : [];
+  const courseSystemFiles = Array.isArray(data.courseSystemFiles) ? data.courseSystemFiles : [];
+
+  // 推进 id 计数器，防止新追加的记录与历史数据的 itemId/fileId 重复
+  const maxFileNum = availabilityFiles.reduce(
+    (m, f) => Math.max(m, Number(String(f.id).replace('file-', '')) || 0), 0);
+  const maxItemNum = [...availabilityFiles.flatMap(f => f.items), ...courseSystemFiles.flatMap(f => f.items)]
+    .reduce((m, it) => Math.max(m, Number(String(it.itemId).replace('item-', '')) || 0), 0);
+  _fileIdCounter = Math.max(_fileIdCounter, maxFileNum);
+  _itemIdCounter = Math.max(_itemIdCounter, maxItemNum);
+
+  setState({
+    availabilityFiles,
+    availabilityData: rederiveAvailability(availabilityFiles),
+    courseSystemFiles,
+    courseSystemData: rederiveCourseSystem(courseSystemFiles),
+    courses: Array.isArray(data.courses) ? data.courses : [],
+    scheduleReports: Array.isArray(data.scheduleReports) ? data.scheduleReports : []
+  }, { persist: false });
+
+  // 常态化解法：算法更新时后端数据自动升级。
+  // 后端数据中的排课报告算法版本若落后于当前代码（算法更新后常忘记手动重排/回写），
+  // 打开页面即自动用当前算法重新排课并落盘，保证后端数据算法版本始终跟随代码。
+  const storedVersion = data.scheduleReports?.[0]?.algorithmVersion;
+  if (storedVersion && storedVersion !== ALGORITHM_VERSION && courseSystemFiles.length > 0) {
+    console.log(`[算法] 后端数据算法版本 ${storedVersion} ≠ 当前代码 ${ALGORITHM_VERSION}，自动重新排课升级数据...`);
+    const ok = await runSchedule();
+    if (ok) {
+      return { loaded: true, upgraded: ALGORITHM_VERSION };
+    }
+  }
+
+  return { loaded: true, upgraded: null };
 }

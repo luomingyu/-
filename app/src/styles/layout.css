@@ -23,6 +23,24 @@
   gap: 16px;
 }
 
+/* 顶部操作分组：排课 / 查看 */
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.action-group__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 /* 年月选择器 */
 .month-selector {
   display: flex;
@@ -52,11 +70,54 @@
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
+/* 顶部条标题组：标题 + 使用说明链接 */
+.top-bar__title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
 .app-title {
   font-size: 18px;
   font-weight: 700;
   color: var(--text);
   letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+/* 算法版本徽标（标题右侧，显示排课算法版本号） */
+.algorithm-badge {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: ui-monospace, Consolas, "Courier New", monospace;
+  color: var(--primary);
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  border-radius: 999px;
+  padding: 3px 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* 使用说明（飞书文档）链接 */
+.usage-link {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary);
+  text-decoration: none;
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  padding: 3px 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.usage-link:hover {
+  background: var(--primary);
+  color: #fff;
 }
 
 /* 主区：左右分栏 5:1 */
