@@ -69,8 +69,11 @@ export function formatExcelDate(excelDate) {
  */
 export function formatExcelTime(excelTime) {
   if (typeof excelTime === 'number' && !isNaN(excelTime)) {
-    const hours = Math.floor(excelTime * 24);
-    const minutes = Math.floor((excelTime * 24 - hours) * 60);
+    // Excel 时间以天的小数存储，浮点精度会导致 17:00 被算成 16:59（0.708333...×24=16.999...）
+    // 先四舍五入到总分钟数再拆分，避免 floor 丢失一分钟
+    const totalMinutes = Math.round(excelTime * 24 * 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
   }
   const timeStr = String(excelTime || '').trim();
