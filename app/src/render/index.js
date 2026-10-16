@@ -1,7 +1,7 @@
 // 渲染编排：订阅 store 变更后统一重绘各区域
 import { renderCalendar } from './calendar.js';
 import { renderCourseSystem } from './courseSystem.js';
-import { renderAvailabilityList, renderScheduledList, renderStatus } from './dataLists.js';
+import { renderAvailabilityList, renderPresetList, renderScheduledList, renderStatus } from './dataLists.js';
 import { getAllClasses, getAllTeachers } from '../state/selectors.js';
 import { setSelectedClass, setSelectedTeacher } from '../state/store.js';
 
@@ -69,11 +69,24 @@ function renderTeacherFilter(state) {
   select.value = current;
 }
 
+/** 更新空闲时间显示切换按钮文案（开=显示，关=隐藏） */
+function renderAvailabilityToggle(state) {
+  const btn = document.getElementById('availabilityToggleBtn');
+  const label = document.getElementById('availabilityToggleLabel');
+  if (!btn || !label) return;
+  const on = state.showAvailability;
+  label.textContent = on ? '空闲开' : '空闲关';
+  btn.classList.toggle('active', on);
+  btn.title = on ? '点击隐藏日历中的空闲时间' : '点击显示日历中的空闲时间';
+}
+
 /** 全量重绘 */
 export function renderAll(state) {
   renderClassFilter(state);
   renderTeacherFilter(state);
+  renderAvailabilityToggle(state);
   renderAvailabilityList(state);
+  renderPresetList(state);
   renderScheduledList(state);
   renderCourseSystem(state);
   renderCalendar(state);

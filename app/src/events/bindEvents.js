@@ -1,14 +1,15 @@
 // 事件绑定：月份导航、多文件累积上传、排课、删除联动、折叠切换（事件委托）
 import {
   getState, setCurrentDate, setSelectedDate,
-  addAvailabilityFile, addCourseSystemFile, setUploadStatus, runSchedule,
-  deleteAvailabilityFile, deleteCourseSystemFile,
-  deleteAvailabilityItem, deleteCourseSystemItem, deleteScheduledCourse,
-  toggleSection, toggleFile, setSelectedClass, setSelectedTeacher
+  addAvailabilityFile, addCourseSystemFile, addPresetFile, setUploadStatus, runSchedule,
+  deleteAvailabilityFile, deleteCourseSystemFile, deletePresetFile,
+  deleteAvailabilityItem, deleteCourseSystemItem, deletePresetItem, deleteScheduledCourse,
+  toggleSection, toggleFile, setSelectedClass, setSelectedTeacher, toggleShowAvailability
 } from '../state/store.js';
-import { parseAvailabilitySheet, parseCourseSystemSheet } from '../utils/excelParser.js';
+import { parseAvailabilitySheet, parseCourseSystemSheet, parsePresetSheet } from '../utils/excelParser.js';
 import { exportScheduledToExcel, exportAvailabilityToExcel } from '../utils/excelExporter.js';
 import { parseRequirements, generateAvailability } from '../utils/availabilityGenerator.js';
+import { exportCalendarImage } from '../utils/imageExporter.js';
 
 export function bindEvents() {
   // 初始化年月选择器
@@ -50,6 +51,27 @@ export function bindEvents() {
     setSelectedTeacher(e.target.value);
   });
 
+  // 空闲时间显示切换按钮
+  document.getElementById('availabilityToggleBtn')?.addEventListener('click', () => {
+    toggleShowAvailability();
+  });
+
+  // 生成图片：按当前班级/师资筛选，将日历课表导出为 PNG
+  document.getElementById('exportImageBtn')?.addEventListener('click', async () => {
+    const state = getState();
+    const month = state.currentDate;
+    const y = month.getFullYear();
+    const m = String(month.getMonth() + 1).padStart(2, '0');
+    // 文件名带上当前筛选条件（如：课表_2026年10月_高一A班_张老师.png）
+    const suffix = [state.selectedClass, state.selectedTeacher].filter(Boolean).join('_');
+    const fileName = `课表_${y}年${m}月${suffix ? '_' + suffix : ''}.png`;
+    try {
+      await exportCalendarImage(state, fileName);
+    } catch (error) {
+      alert(`生成图片失败：${error.message}`);
+    }
+  });
+
   // 阻止上传按钮、示例表、导出按钮的点击冒泡到 header（避免误触折叠）
   document.querySelectorAll('.upload-btn-wrapper, .example-download, .section-export').forEach(wrapper => {
     wrapper.addEventListener('click', e => e.stopPropagation());
@@ -76,16 +98,42 @@ export function bindEvents() {
     if (!file) return;
     setUploadStatus('courseSystem', '正在解析文件...', 'info');
     try {
-      const { list, warnings } = await parseCourseSystemSheet(file);
+      const { list, warnings, mixedSheets } = await parseCourseSystemSheet(file);
       addCourseSystemFile(file.name, list);
-      if (warnings && warnings.length > 0) {
+      // v5.83：混合形态子表（既有合班课之前的普通课、又有合班课之后的普通课）暂不做排课处理——
+      // 允许导入但标红 error 警告（列出子表名），排课侧整表跳过并写入报告第八章
+      const mixedWarn = (mixedSheets && mixedSheets.length > 0)
+        ? `🔴 混合形态子表不排课：${mixedSheets.map(m => m.sheetName).join('、')}（先分后合与先合后分并存，请拆分后重新导入）`
+        : '';
+      const warnMsg = (warnings && warnings.length > 0) ? `⚠ ${warnings.join('；')}` : '';
+      const warnParts = [warnMsg, mixedWarn].filter(Boolean);
+      if (warnParts.length > 0) {
         // v5.73：未识别班级已保留原值继续排课（宽松模式），黄色警告提示
-        setUploadStatus('courseSystem', `成功导入 ${list.length} 条（来自 ${file.name}）；⚠ ${warnings.join('；')}`, 'warning');
+        const msg = `成功导入 ${list.length} 条（来自 ${file.name}）；${warnParts.join('；')}`;
+        // v5.83：混合形态子表视为 error 标红（仍允许导入），其余未识别班级提示仍为 warning 黄色
+        setUploadStatus('courseSystem', msg, mixedSheets && mixedSheets.length > 0 ? 'error' : 'warning');
       } else {
         setUploadStatus('courseSystem', `成功导入 ${list.length} 条（来自 ${file.name}）`, 'success');
       }
     } catch (error) {
       setUploadStatus('courseSystem', `导入失败：${error.message}`, 'error');
+    }
+    event.target.value = '';
+  });
+
+  // 上传：已排课表（v5.90，跨科目班级占用约束；累积添加）
+  document.getElementById('presetFileInput')?.addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    setUploadStatus('preset', '正在解析文件...', 'info');
+    try {
+      const { list, warnings } = await parsePresetSheet(file);
+      addPresetFile(file.name, list);
+      const warnMsg = (warnings && warnings.length > 0) ? `⚠ ${warnings.join('；')}` : '';
+      const msg = warnMsg ? `成功导入 ${list.length} 条（来自 ${file.name}）；${warnMsg}` : `成功导入 ${list.length} 条（来自 ${file.name}）`;
+      setUploadStatus('preset', msg, warnings && warnings.length > 0 ? 'warning' : 'success');
+    } catch (error) {
+      setUploadStatus('preset', `导入失败：${error.message}`, 'error');
     }
     event.target.value = '';
   });
@@ -159,7 +207,13 @@ export function bindEvents() {
       alert('未生成任何空闲时间，请检查排课要求');
       return;
     }
-    exportAvailabilityToExcel(rows, `空闲时间表_${y}年${m + 1}月.xlsx`);
+    // v5.74：文件名从实际生成的 rows 推导年月（与直接录入一致），
+    // 避免 requirements 中写"26年10月"（两位年份）时文件名仍标成 currentDate 对应月份
+    const monthSet = new Set(rows.map(r => {
+      const [ry, rm] = r.date.split('-');
+      return `${ry}年${parseInt(rm, 10)}月`;
+    }));
+    exportAvailabilityToExcel(rows, `空闲时间表_${[...monthSet].join('、')}.xlsx`);
   });
 
   // ===== 直接录入：按排课要求生成空闲时间表并直接录入 =====
@@ -227,6 +281,16 @@ export function bindEvents() {
       case 'delete-course-item': {
         const itemId = target.dataset.itemId;
         if (itemId) deleteCourseSystemItem(itemId);
+        break;
+      }
+      case 'delete-preset-file': {
+        const fileId = target.dataset.fileId;
+        if (fileId) deletePresetFile(fileId);
+        break;
+      }
+      case 'delete-preset-item': {
+        const itemId = target.dataset.itemId;
+        if (itemId) deletePresetItem(itemId);
         break;
       }
       case 'delete-scheduled': {

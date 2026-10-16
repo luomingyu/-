@@ -12,6 +12,7 @@
       <div class="top-bar__title-group">
         <h1 class="app-title">📅 月度排课系统</h1>
         <span class="algorithm-badge" id="algorithmVersionBadge" title="排课算法版本"></span>
+        <span class="app-version-badge" id="appVersionBadge" title="应用版本（与开发文档版本历史同步）"></span>
         <a class="usage-link" href="https://gaotuedu.feishu.cn/docx/XiCsdiLDnoM6uoxIaNGcg8Lankf" target="_blank" rel="noopener noreferrer" title="打开月度排课系统使用说明（飞书文档）">月度排课系统使用说明 ↗</a>
       </div>
       <div class="top-bar__actions">
@@ -39,6 +40,12 @@
               <option value="">全部师资</option>
             </select>
           </div>
+          <button class="availability-toggle-btn" id="availabilityToggleBtn" type="button" title="点击切换日历是否显示空闲时间（默认显示）">
+            <span>⏱</span><span id="availabilityToggleLabel">空闲开</span>
+          </button>
+          <button class="image-export-btn" id="exportImageBtn" type="button" title="将当前日历课表生成 PNG 图片（按当前班级/师资筛选）">
+            <span>🖼</span><span>生成图片</span>
+          </button>
         </div>
       </div>
     </header>
@@ -141,7 +148,39 @@
           </div>
         </section>
 
-        <!-- 折叠区 3：排课结果 -->
+        <!-- 整合区 3：已排课表（跨科目班级占用约束，v5.85） -->
+        <section class="tree-section integrated-section" data-section="preset">
+          <div class="tree-section__header" data-action="toggle-section" data-key="preset">
+            <div class="tree-section__title-row">
+              <span class="tree-section__toggle" id="toggle-preset">▼</span>
+              <span class="tree-section__title">🗓 已排课表</span>
+              <span class="tree-section__count" id="presetListCount">0 条</span>
+            </div>
+            <div class="tree-section__meta-row">
+              <span class="section-upload">
+                <div class="upload-btn-wrapper">
+                  <button class="upload-btn" type="button">
+                    <span>📁</span><span>上传</span>
+                  </button>
+                  <input type="file" id="presetFileInput" accept=".xlsx,.xls,.csv" />
+                </div>
+                <a class="example-download" href="示例文件/已排课表.xlsx" download="已排课表.xlsx" title="下载示例表（班级 · 课节名称 · 师资 · 授课日期 · 授课时间）">
+                  <span>📄</span><span>示例表</span>
+                </a>
+              </span>
+            </div>
+            <div class="tree-section__status-row">
+              <span class="upload-status info" id="presetStatus">班级 · 课节名称 · 师资 · 授课日期 · 授课时间</span>
+            </div>
+          </div>
+          <div class="tree-section__body">
+            <div id="presetTreeContent">
+              <div class="data-list-empty">暂无已排课表数据，请上传文件</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 折叠区 4：排课结果 -->
         <section class="tree-section" data-section="scheduled">
           <div class="tree-section__header" data-action="toggle-section" data-key="scheduled">
             <div class="tree-section__title-row">

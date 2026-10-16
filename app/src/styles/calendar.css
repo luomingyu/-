@@ -202,28 +202,37 @@
   border-left: 3px solid #1D4ED8;
 }
 
+/* 已排课表条目：灰底虚线左边框，与排课结果区分 */
+.course-card.preset {
+  background: linear-gradient(135deg, #F1F5F9 0%, #E2E8F0 100%);
+  border-left: 3px dashed #64748B;
+}
+
 .course-class {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--primary);
   margin-bottom: 1px;
 }
 
 .course-name {
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--text);
   margin-bottom: 1px;
 }
 
 .course-time {
-  font-size: 11px;
-  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
   margin-bottom: 1px;
 }
 
 .course-teacher {
-  font-size: 10px;
-  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
 }
 
 /* ===== 空闲时间卡片 ===== */
@@ -245,4 +254,30 @@
 .availability-teacher {
   font-size: 11px;
   color: #047857;
+}
+
+/* ===== 导出图片容器（离屏渲染，用于「生成图片」） ===== */
+/* 放宽页面的高度/滚动限制，让整月课程完整展开后再截图 */
+.calendar-export {
+  width: 1440px;
+  background: var(--card);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.calendar-export .calendar-body {
+  overflow: visible;
+}
+
+.calendar-export .calendar-grid,
+.calendar-export .week-row {
+  flex: none;
+}
+
+.calendar-export .day-cell {
+  min-height: 140px;
+}
+
+.calendar-export .day-courses {
+  overflow: visible;
 }

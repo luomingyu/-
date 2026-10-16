@@ -1,5 +1,5 @@
 // 空闲时间列表 + 排课结果列表渲染（树形折叠 + 事件委托删除）
-import { getScheduledCourses } from '../state/selectors.js';
+import { getScheduledCourses, getFilteredPresetFiles } from '../state/selectors.js';
 
 function escapeHtml(str) {
   return String(str ?? '')
@@ -70,6 +70,60 @@ export function renderAvailabilityList(state) {
   content.innerHTML = html;
 }
 
+/** 渲染已排课表（v5.90，多文件树形折叠；仅作班级占用约束展示，不参与课程体系联动） */
+export function renderPresetList(state) {
+  const content = document.getElementById('presetTreeContent');
+  const count = document.getElementById('presetListCount');
+  if (!content) return;
+
+  const files = getFilteredPresetFiles(state);
+  const total = files.reduce((n, f) => n + f.items.length, 0);
+  if (count) count.textContent = `${total} 条`;
+
+  syncSectionCollapsed(content, 'preset', state);
+
+  if (files.length === 0) {
+    const hasAny = (state.presetFiles || []).length > 0;
+    content.innerHTML = `<div class="data-list-empty">${hasAny ? '无符合筛选条件的已排课表数据' : '暂无已排课表数据'}</div>`;
+    return;
+  }
+
+  let html = '';
+  files.forEach(file => {
+    const collapsed = state.ui.fileCollapsed[file.id];
+    const itemCount = file.items.length;
+    html += `
+      <div class="file-node ${collapsed ? 'collapsed' : ''}">
+        <div class="file-node__header" data-action="toggle-file" data-file-id="${file.id}">
+          <span class="file-node__toggle">▼</span>
+          <span class="file-node__icon">📁</span>
+          <span class="file-node__name">${escapeHtml(file.fileName)}</span>
+          <span class="file-node__count">${itemCount}</span>
+          <button class="delete-btn" data-action="delete-preset-file" data-file-id="${file.id}">删除</button>
+        </div>
+        <div class="file-node__body">
+    `;
+    if (itemCount === 0) {
+      html += '<div class="file-node__empty">该文件无条目</div>';
+    } else {
+      file.items.forEach(item => {
+        html += `
+          <div class="data-list-item">
+            <div class="data-list-info">
+              <div class="data-list-text">${escapeHtml(item.courseName || '(未填课节名称)')}</div>
+              <div class="data-list-subtext">${escapeHtml(item.classType)}${item.teacher ? ' · ' + escapeHtml(item.teacher) : ''} · ${item.date} · ${item.startTime} - ${item.endTime}</div>
+            </div>
+            <button class="delete-btn" data-action="delete-preset-item" data-item-id="${item.itemId}">删除</button>
+          </div>
+        `;
+      });
+    }
+    html += `</div></div>`;
+  });
+
+  content.innerHTML = html;
+}
+
 /** 渲染排课结果（扁平列表） */
 export function renderScheduledList(state) {
   const content = document.getElementById('scheduledTreeContent');
@@ -118,6 +172,7 @@ export function renderStatus(state) {
 
   updateStatusEl('uploadStatus', state.uploadStatus.availability);
   updateStatusEl('courseSystemStatus', state.uploadStatus.courseSystem);
+  updateStatusEl('presetStatus', state.uploadStatus.preset);
 
   // 排课状态显示在导出按钮下方
   const scheduleStatus = state.scheduleStatus;
@@ -145,7 +200,7 @@ export function renderStatus(state) {
         genText = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
       }
       reportEl.className = 'schedule-status success';
-      reportEl.textContent = `最近报告：${latest.fileName}（${genText} · 算法 ${latest.algorithmVersion || '-'} · 成功 ${latest.successCount ?? '-'} 门 / 失败 ${latest.failedCount ?? '-'} 门）`;
+      reportEl.textContent = `最近报告：${latest.fileName}（${genText} · 应用版本 ${latest.appVersion || '-'} · 成功 ${latest.successCount ?? '-'} 门 / 失败 ${latest.failedCount ?? '-'} 门）`;
     }
   }
 }

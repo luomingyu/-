@@ -70,6 +70,56 @@
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
+/* 空闲时间显示切换按钮（查看区） */
+.availability-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  height: 40px;
+  transition: all 0.2s ease;
+}
+
+.availability-toggle-btn:hover {
+  border-color: var(--primary);
+}
+
+.availability-toggle-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+/* 生成图片按钮（查看区） */
+.image-export-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  height: 40px;
+  transition: all 0.2s ease;
+}
+
+.image-export-btn:hover {
+  border-color: var(--primary);
+}
+
 /* 顶部条标题组：标题 + 使用说明链接 */
 .top-bar__title-group {
   display: flex;
@@ -94,6 +144,21 @@
   color: var(--primary);
   background: rgba(99, 102, 241, 0.1);
   border: 1px solid rgba(99, 102, 241, 0.45);
+  border-radius: 999px;
+  padding: 3px 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* 应用版本徽标（标题右侧，显示与开发文档同步的应用版本号；中性灰以区别于算法版本徽标） */
+.app-version-badge {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: ui-monospace, Consolas, "Courier New", monospace;
+  color: var(--text-secondary);
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid var(--border);
   border-radius: 999px;
   padding: 3px 10px;
   line-height: 1.4;

@@ -64,6 +64,16 @@
   text-decoration: line-through;
 }
 
+/* v5.83：混合形态子表（先分后合与先合后分并存）整表跳过排课，红色底深色字强调报错 */
+.course-system-table tr.row-mixed {
+  background: #FEE2E2;
+}
+
+.course-system-table tr.row-mixed td {
+  color: #B91C1C;
+  font-weight: 500;
+}
+
 .status-tag {
   display: inline-block;
   padding: 2px 8px;

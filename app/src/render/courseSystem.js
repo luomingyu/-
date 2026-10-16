@@ -1,5 +1,6 @@
 // 课程体系表渲染（多文件树形折叠 + 紧凑表格 + 状态列，事件委托删除）
 import { getCourseSystemStats } from '../state/selectors.js';
+import { analyzeSheetForms, sheetKeyOf } from '../utils/sheetForm.js';
 
 function escapeHtml(str) {
   return String(str ?? '')
@@ -55,6 +56,10 @@ export function renderCourseSystem(state) {
   files.forEach(file => {
     const collapsed = state.ui.fileCollapsed[file.id];
     const itemCount = file.items.length;
+    // v5.83：混合形态子表（既有合班课之前的普通课、又有合班课之后的普通课）暂不做排课处理——
+    // 整表跳过排课，此处红标高亮并标记「混」状态，明确报错提示
+    const { mixedSheets } = analyzeSheetForms(file.items || []);
+    const mixedKeys = new Set((mixedSheets || []).map(m => m.sheetKey));
     html += `
       <div class="file-node ${collapsed ? 'collapsed' : ''}">
         <div class="file-node__header" data-action="toggle-file" data-file-id="${file.id}">
@@ -85,13 +90,17 @@ export function renderCourseSystem(state) {
         <tbody>
       `;
       file.items.forEach(item => {
-        const rowClass = item.scheduled === false ? ' class="row-unscheduled"' : '';
+        const isMixed = mixedKeys.has(sheetKeyOf(item));
+        const rowClass = isMixed ? ' class="row-mixed"' : (item.scheduled === false ? ' class="row-unscheduled"' : '');
         const startCell = item.startDate ? escapeHtml(item.startDate.slice(5)) : '<span class="cell-muted">—</span>';
         const endCell = item.endDate ? escapeHtml(item.endDate.slice(5)) : '<span class="cell-muted">—</span>';
         let statusCell = '';
         if (showStatusCol) {
           if (item.scheduled === true) {
             statusCell = '<td><span class="status-tag success">✓</span></td>';
+          } else if (isMixed) {
+            // v5.83：混合形态子表整表跳过排课，红色「混」标签明确报错
+            statusCell = '<td><span class="status-tag error">混</span></td>';
           } else if (item.scheduled === false) {
             statusCell = '<td><span class="status-tag error">✗</span></td>';
           } else {

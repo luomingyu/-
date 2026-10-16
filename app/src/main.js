@@ -4,10 +4,15 @@ import { subscribe, getState, hydrateFromServer, setStatus } from './state/store
 import { renderAll } from './render/index.js';
 import { bindEvents } from './events/bindEvents.js';
 import { ALGORITHM_VERSION } from './scheduler/report.js';
+import { APP_VERSION } from './config/constants.js';
 
-// 标题右侧展示排课算法版本（与报告/持久化数据中的版本号同源，避免手改不一致）
+// 标题右侧展示排课算法版本（仅算法标识；报告与持久化数据的版本号已统一为应用版本 APP_VERSION）
 const versionBadge = document.getElementById('algorithmVersionBadge');
 if (versionBadge) versionBadge.textContent = `算法 ${ALGORITHM_VERSION}`;
+
+// 应用版本徽标（与开发文档版本历史同步，v5.94 起独立于算法版本展示）
+const appVersionBadge = document.getElementById('appVersionBadge');
+if (appVersionBadge) appVersionBadge.textContent = `应用 ${APP_VERSION}`;
 
 // 订阅状态变更 → 全量重绘
 subscribe((state) => renderAll(state));
@@ -24,7 +29,7 @@ renderAll(getState());
 hydrateFromServer().then((res) => {
   if (res && res.loaded) {
     setStatus('schedule', res.upgraded
-      ? `检测到算法版本已更新，已自动重新排课并同步服务器数据（${res.upgraded}）`
+      ? `检测到版本已更新，已自动重新排课并同步服务器数据（${res.upgraded}）`
       : '已接入本机服务器：数据自动保存到本机电脑，可分享局域网链接给他人', 'info');
   }
 });
