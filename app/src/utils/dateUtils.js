@@ -48,11 +48,36 @@ export function getDaysInMonth(year, month) {
 }
 
 /** Excel 日期序列号 → Date（基准 25569，+8 时区） */
+function excelSerialToDate(serial) {
+  const date = new Date((serial - 25569) * 86400 * 1000);
+  date.setHours(date.getHours() + 8);
+  return date;
+}
+
+/**
+ * Excel 日期 → Date（基准 25569，+8 时区）
+ * 兼容：序列号（数字/纯数字字符串）、Date 对象、ISO 文本（2026-10-06）、
+ * 斜杠/点号分隔（2026/10/6、2026.10.6）、中文「2026年10月6日」「10月6日」
+ * 无法识别时返回 Invalid Date（后续由 formatExcelDate 产出 "NaN-NaN-NaN"）
+ */
 export function parseExcelDate(excelDate) {
-  if (!isNaN(excelDate)) {
-    const date = new Date((excelDate - 25569) * 86400 * 1000);
-    date.setHours(date.getHours() + 8);
-    return date;
+  if (excelDate instanceof Date) return excelDate;
+  if (excelDate === null || excelDate === undefined) return new Date(NaN);
+  if (typeof excelDate === 'number') {
+    return isNaN(excelDate) ? new Date(NaN) : excelSerialToDate(excelDate);
+  }
+  const str = String(excelDate).trim();
+  if (!str) return new Date(NaN);
+  // 纯数字文本按 Excel 序列号处理
+  if (/^\d+(\.\d+)?$/.test(str)) return excelSerialToDate(parseFloat(str));
+  // 中文完整日期：2026年10月6日 / 2026年10月6号
+  const cnFull = str.match(/^(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]?$/);
+  if (cnFull) return new Date(Number(cnFull[1]), Number(cnFull[2]) - 1, Number(cnFull[3]));
+  // 中文月日（缺年份，按当前年）：10月6日
+  const cnMonthDay = str.match(/^(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]?$/);
+  if (cnMonthDay) {
+    const now = new Date();
+    return new Date(now.getFullYear(), Number(cnMonthDay[1]) - 1, Number(cnMonthDay[2]));
   }
   return new Date(excelDate);
 }

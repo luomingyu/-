@@ -1,7 +1,7 @@
 // 排课过程可变上下文：封装师资/班级日程映射，避免闭包捕获
 import { timeToMinutes, minutesToTime } from '../utils/dateUtils.js';
 import { splitClassTypes } from '../utils/classType.js';
-import { CLASS_MIN_GAP, AVAIL_REMOVE_PAD } from './constants.js';
+import { CLASS_MIN_GAP, AVAIL_REMOVE_PAD, AVAIL_REMOVE_PAD_TEACHER } from './constants.js';
 
 /**
  * 创建排课上下文
@@ -39,6 +39,32 @@ export function registerSlot(ctx, { teacher, classType, date, startTime, endTime
   }
 
   ctx.dayCourseCounts[date] = (ctx.dayCourseCounts[date] || 0) + 1;
+}
+
+/**
+ * 注册已排课表（preset）占用槽 —— 班级 + 师资双维度占用。
+ *   ① 班级维度（始终生效）：写入 classScheduleByDate（按合班拆分到各组成班级），
+ *      实现「同一班级同一时间段只能上一门课」；
+ *   ② 师资维度（v5.91，师资列非空时生效）：写入 teacherScheduleByDate，
+ *      扣除该师资自身已排时段——由 buildTeacherClassAvailability 的 teacherCourses
+ *      分支按「前后各 AVAIL_REMOVE_PAD_TEACHER（Y）分钟缓冲」扣除
+ *      （同一师资同一时段不能上两门课）。
+ * **刻意不写** teacherClassScheduleByDate / dayCourseCounts：避免触发
+ * 「每天至多一节」师资维度硬约束——同班/同师同日不同时段仍可并存，
+ * 仅按时间窗（含 X / Y 缓冲）互斥。
+ */
+export function registerPresetClassSlots(ctx, { classType, teacher, date, startTime, endTime }) {
+  for (const eachClass of splitClassTypes(classType)) {
+    if (!ctx.classScheduleByDate[eachClass]) ctx.classScheduleByDate[eachClass] = {};
+    if (!ctx.classScheduleByDate[eachClass][date]) ctx.classScheduleByDate[eachClass][date] = [];
+    ctx.classScheduleByDate[eachClass][date].push({ startTime, endTime });
+  }
+  // 师资维度占用（师资列非空时）：扣除该师资自身已排时段（前后各留 Y 分钟缓冲）
+  if (teacher) {
+    if (!ctx.teacherScheduleByDate[teacher]) ctx.teacherScheduleByDate[teacher] = {};
+    if (!ctx.teacherScheduleByDate[teacher][date]) ctx.teacherScheduleByDate[teacher][date] = [];
+    ctx.teacherScheduleByDate[teacher][date].push({ startTime, endTime });
+  }
 }
 
 /**
@@ -151,14 +177,51 @@ export function applyCutAfter(availability, cutAfter) {
 }
 
 /**
+ * 合班课之前截断（v5.83，先合后分侧，严格镜像 applyCutAfter v5.59）：
+ * 删除「行序最后一个已排日期合班课」时间段之前的所有空闲时间。
+ * 切割时刻 = 合班课结束时间 + AVAIL_REMOVE_PAD 分钟（如 19:00 结束 → 19:05）。
+ * 保留时间域：
+ *   · date > cutBefore.date 的碎片全部保留；
+ *   · date === cutBefore.date 且碎片结束时间晚于切割时刻（不含）的保留，
+ *     跨越切割点的碎片截断到切割时刻（开始时刻恰为切割点的保留）；
+ *   · date < cutBefore.date（或结束时间不晚于切割时刻）的碎片丢弃。
+ * 应用此函数后，该子表普通课的候选时间域不再包含最后一个合班课日期（含）之前的部分。
+ * @param {Array} availability 空闲时间碎片列表（含 date/startTime/endTime）
+ * @param {Object|null} [cutBefore] { date: 'YYYY-MM-DD', endTime: 'HH:MM'（已加缓冲后的切割时刻）}
+ * @returns {Array} 截断后的空闲时间列表
+ */
+export function applyCutBefore(availability, cutBefore) {
+  if (!Array.isArray(availability) || !cutBefore || !cutBefore.date || availability.length === 0) {
+    return availability;
+  }
+  const cutMinute = cutBefore.endTime ? timeToMinutes(cutBefore.endTime) : 0;
+  const result = [];
+  for (const frag of availability) {
+    if (!frag) continue;
+    if (frag.date < cutBefore.date) continue; // 切割日期之前 → 整段丢弃
+    if (frag.date === cutBefore.date) {
+      const s = timeToMinutes(frag.startTime);
+      const e = timeToMinutes(frag.endTime);
+      if (e <= cutMinute) continue;           // 终点不晚于切割时刻 → 丢弃
+      if (s < cutMinute) {                    // 跨越切割点 → 截断到切割时刻
+        result.push({ ...frag, startTime: minutesToTime(cutMinute) });
+        continue;
+      }
+    }
+    result.push(frag);                        // 晚于切割日期（或未跨越切割点）→ 保留
+  }
+  return result;
+}
+
+/**
  * 构建师资-班级空闲时间表：从师资空闲时间中减去已排课占用的时段（v5.39）
  *
  * 扣除维度：
  *   1. 班级已占用时段：班级课程时间表包含该班级所有已排课程（含其他师资），
  *      确保新排课程不与班级已有课程冲突，扣减时开头结尾各多减 AVAIL_REMOVE_PAD 分钟；
  *   2. 师资已占用时段：该师资自身已排课程（同一时刻师资只能上一门课，
- *      即使那门课是别的班级的也要扣除），扣减时同样开头结尾各多减 AVAIL_REMOVE_PAD 分钟，
- *      确保新排课程与师资既有档期保持间隔（如已排 17:00-19:00，实际扣除 16:55-19:05）。
+ *      即使那门课是别的班级的也要扣除），扣减时开头结尾各多减 AVAIL_REMOVE_PAD_TEACHER（Y）分钟，
+ *      确保新排课程与师资既有档期保持间隔（缺省 Y=30，如已排 17:00-19:00，实际按 16:30-19:30 扣除）。
  *   3. 尾段预留（v5.49，可选）：首次排含合班课子表时，将该月后 N% 日期中
  *      「合班课其他班级」已排课程时间一并扣除——为合班课预留尾段位置，
  *      避免子表内普通课占用尾段日期，导致合班课（需多个班级同时空闲）无处可排。
@@ -166,7 +229,16 @@ export function applyCutAfter(availability, cutAfter) {
  *   4. 合班课之后截断（v5.59，可选）：若本子表含有已排日期的合班课，删除该子表
  *      第一个合班课时间段（开始时间 − AVAIL_REMOVE_PAD 分钟）之后的所有空闲时间——
  *      该子表普通课的候选时间域收缩到第一个合班课之前（如合班课 8/22 17:00-19:00，
- *      则 8/22 16:55 及之后所有空闲时间全部删除）。
+ *      则 8/22 16:55 及之后所有空闲时间全部删除）。v5.84 起仅先分后合（pre-merge）
+ *      形态子表由调用方传入（index.js 带 form gating 计算），post-merge 传入 null。
+ *   5. 头段预留（v5.83，可选，先合后分侧，严格镜像尾段预留）：将该月前 N% 日期中
+ *      「合班课其他班级」已排课程时间一并扣除——为合班课预留头段位置，
+ *      避免子表内普通课占用头段日期，导致合班课（需多个班级同时空闲）无处可排。
+ *      N = 合班课数量 ÷ 子表总课数量 × 130%，头段天数 = 当月天数 × N，取整。
+ *   6. 合班课之前截断（v5.83，可选）：若本子表含有已排日期的合班课，删除该子表
+ *      最后一个合班课时间段（结束时间 + AVAIL_REMOVE_PAD 分钟）之前的所有空闲时间——
+ *      该子表普通课的候选时间域收缩到最后一个合班课之后（如合班课 8/22 17:00-19:00，
+ *      则 8/22 19:05 及之前所有空闲时间全部删除）。
  *
  * 算法：对每个空闲时间段，用「班级已占时段（含缓冲）+ 师资已占时段」做差集，返回剩余碎片
  *
@@ -180,14 +252,21 @@ export function applyCutAfter(availability, cutAfter) {
  * @param {Object} [options.cutAfter] 合班课之后截断配置 { date: 'YYYY-MM-DD', startTime: 'HH:MM' }
  *        date = 子表内第一个已排日期合班课的日期；startTime = 切割时刻
  *        （合班课开始时间 − AVAIL_REMOVE_PAD 分钟，如 17:00 → 16:55）
+ * @param {Object} [options.headReserve] 头段预留配置 { dates: string[], otherClasses: string[] }
+ *        dates = 该月前 N% 的日期列表；otherClasses = 合班课组成班级（本课班级之外的自动跳过）
+ * @param {Object} [options.cutBefore] 合班课之前截断配置 { date: 'YYYY-MM-DD', endTime: 'HH:MM' }
+ *        date = 子表内最后一个已排日期合班课的日期；endTime = 切割时刻
+ *        （合班课结束时间 + AVAIL_REMOVE_PAD 分钟，如 19:00 → 19:05）
  * @returns {Array} 过滤后的空闲时间列表（仅包含未被班级与师资占用的时段）
  */
 export function buildTeacherClassAvailability(monthAvailability, teacher, classType, ctx, options = {}) {
-  // v5.59：合班课之后截断 —— 先对师资原始空闲时间剔除「第一个合班课之后」的时间域，
-  // 再执行班级/师资占用扣除（截断点由调用方计算并透传，见 index.js 子表循环）
-  let teacherAvail = applyCutAfter(
-    monthAvailability.filter(a => a.teacher === teacher),
-    options.cutAfter
+  // v5.59 + v5.83：先对师资原始空闲时间执行「合班课截断」——
+  //   cutAfter（v5.59，先分后合侧）：剔除第一个已排日期合班课开始时间 − 缓冲 之后的时间域；
+  //   cutBefore（v5.83，先合后分侧）：剔除最后一个已排日期合班课结束时间 + 缓冲 之前的时间域。
+  //   二者链式叠加（严格镜像，先删后侧再删前侧），再执行班级/师资占用扣除。
+  let teacherAvail = applyCutBefore(
+    applyCutAfter(monthAvailability.filter(a => a.teacher === teacher), options.cutAfter),
+    options.cutBefore
   );
   if (teacherAvail.length === 0) return [];
 
@@ -220,6 +299,25 @@ export function buildTeacherClassAvailability(monthAvailability, teacher, classT
     }
   }
 
+  // 头段预留（v5.83，先合后分侧，严格镜像尾段预留）：将该月前 N% 日期中
+  // 「合班课其他班级」已排课程时间一并扣除——为合班课（需多班同时空闲）腾出位置。
+  // N = 合班课数量 ÷ 子表总课数量 × 130%，头段天数 = 当月天数 × N，取整（见 index.js 子表循环）。
+  // 当前课程班级自身（splitClassTypes(classType) 已覆盖）不在其中，避免重复扣除。
+  const head = options.headReserve;
+  if (head && Array.isArray(head.dates) && head.dates.length > 0) {
+    const headDateSet = new Set(head.dates);
+    const thisClasses = new Set(splitClassTypes(classType));
+    for (const otherClass of head.otherClasses || []) {
+      if (thisClasses.has(otherClass)) continue;
+      const schedule = ctx.classScheduleByDate[otherClass] || {};
+      for (const date of Object.keys(schedule)) {
+        if (!headDateSet.has(date)) continue;
+        if (!classSchedule[date]) classSchedule[date] = [];
+        classSchedule[date].push(...schedule[date]);
+      }
+    }
+  }
+
   const result = [];
   for (const avail of teacherAvail) {
     const availStart = timeToMinutes(avail.startTime);
@@ -236,8 +334,9 @@ export function buildTeacherClassAvailability(monthAvailability, teacher, classT
     }
 
     // 构建已占用区间：
-    //   班级课程占用：开头结尾各多减 AVAIL_REMOVE_PAD 分钟（如已排 17:00-19:00，按 16:55-19:05 扣除）
-    //   师资自身课程占用：同样开头结尾各多减 AVAIL_REMOVE_PAD 分钟，与师资既有档期保持间隔
+    //   班级课程占用：开头结尾各多减 AVAIL_REMOVE_PAD（X）分钟（如已排 17:00-19:00，按 16:55-19:05 扣除）
+    //   师资自身课程占用：改用独立的 AVAIL_REMOVE_PAD_TEACHER（Y），与师资既有档期保持间隔（缺省 Y=30）
+    //   同一课程若同时命中两类，两段区间在下方合并取并集，等效于取 max(X, Y)
     const occupied = [];
     for (const c of classCourses) {
       occupied.push({
@@ -247,8 +346,8 @@ export function buildTeacherClassAvailability(monthAvailability, teacher, classT
     }
     for (const c of teacherCourses) {
       occupied.push({
-        start: Math.max(0, timeToMinutes(c.startTime) - AVAIL_REMOVE_PAD),
-        end: timeToMinutes(c.endTime) + AVAIL_REMOVE_PAD
+        start: Math.max(0, timeToMinutes(c.startTime) - AVAIL_REMOVE_PAD_TEACHER),
+        end: timeToMinutes(c.endTime) + AVAIL_REMOVE_PAD_TEACHER
       });
     }
     occupied.sort((a, b) => a.start - b.start);

@@ -35,9 +35,11 @@ export const W_PROGRESSION = 5; // 日期递增（课程体系顺序）
  *                                 导致后续合班课/其他师资无日期可排）
  * @param {number} reserveAfter 本课后还需要排的同师资课程数（v5.34.2：含本课在内共需日期数，
  *                               排课时须保证本课之后仍有足够可用日期，否则后续课程将无日期可排）
+ * @param {string|null} earliestDate 日期下界（v5.83，先合后分侧：位于已定日期合班课之后的普通课，
+ *                                   限定在该合班课日期后一天之后排课）
  * @returns {{date, startTime, endTime} | null}
  */
-export function tryScheduleCourse(ctx, courseItem, teacher, targetDates, minGap, previousDate = null, allAvailableDates = [], preferredSlot = null, latestDate = null, earliestFirst = false, reserveAfter = 1) {
+export function tryScheduleCourse(ctx, courseItem, teacher, targetDates, minGap, previousDate = null, allAvailableDates = [], preferredSlot = null, latestDate = null, earliestFirst = false, reserveAfter = 1, earliestDate = null) {
   const { classType, duration, startDate, endDate } = courseItem;
   const durationMinutes = durationToMinutes(duration);
   // v5.51：解析锚点——对象槽位提取日期（时段可能为空），兼容旧的纯日期字符串
@@ -57,12 +59,14 @@ export function tryScheduleCourse(ctx, courseItem, teacher, targetDates, minGap,
   };
   const rangeTargetDates = targetDates.filter(inCourseRange);
   if (rangeTargetDates.length === 0) return null;
-  // 日期窗口硬约束（v5.31 下界 / v5.34 上界）：
+  // 日期窗口硬约束（v5.31 下界 / v5.34 上界 / v5.83 合班课日期下界）：
   //   下界：存在前一门课程日期时，只允许排 >= prevDate 的日期（课程体系顺序）
   //   上界：后子表中位于合班课之前的普通课，须限定在合班课日期之前
+  //   合班课日期下界：先合后分侧中位于已定日期合班课之后的普通课，只允许排 >= earliestDate 的日期
   const effectiveTargetDates = rangeTargetDates.filter(d => {
     if (previousDate && d < previousDate) return false;
     if (latestDate && d > latestDate) return false;
+    if (earliestDate && d < earliestDate) return false;
     return true;
   });
   if (effectiveTargetDates.length === 0) return null;

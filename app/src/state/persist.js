@@ -22,14 +22,14 @@ export async function loadFromServer() {
 }
 
 /** 防抖保存业务数据到服务器 */
-export function schedulePersist(availabilityFiles, courseSystemFiles, courses, scheduleReports) {
+export function schedulePersist(availabilityFiles, courseSystemFiles, presetFiles, courses, scheduleReports) {
   clearTimeout(timer);
   timer = setTimeout(async () => {
     try {
       await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ availabilityFiles, courseSystemFiles, courses, scheduleReports })
+        body: JSON.stringify({ availabilityFiles, courseSystemFiles, presetFiles, courses, scheduleReports })
       });
     } catch {
       // 服务器不可用时静默失败（本地模式）

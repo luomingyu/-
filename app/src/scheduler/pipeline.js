@@ -7,13 +7,17 @@
 // → 生成排课报告 → 返回可直接落库/落盘的完整业务数据。
 // ============================================================
 import { generateSchedule } from './index.js';
-import { buildScheduleReportMarkdown, scheduleReportFileName, ALGORITHM_VERSION } from './report.js';
+import { buildScheduleReportMarkdown, scheduleReportFileName } from './report.js';
+import { APP_VERSION } from '../config/constants.js';
 
 /**
  * 执行排课管线
  * @param {Object} input
  * @param {Array}  input.availabilityFiles 师资空闲表（按文件分组，{items:[...]})
  * @param {Array}  input.courseSystemFiles 课程体系表（按文件分组，{items:[...]})
+ * @param {Array}  [input.presetFiles] 已排课表（v5.90，按文件分组，{items:[...]})
+ *                                      跨科目班级/师资双维度占用约束（师资维度 v5.91），
+ *                                      缺省/空数组时零影响
  * @param {Date}   [input.currentDate] 排课月份基准（服务器不传 → 用当前时间，
  *                                      与前端当天打开页面 state.currentDate 一致）
  * @returns {{
@@ -26,17 +30,19 @@ import { buildScheduleReportMarkdown, scheduleReportFileName, ALGORITHM_VERSION 
  *   successCount?: number,
  *   failedCount?: number,
  *   diagnostics?: Object,
- *   algorithmVersion?: string
+ *   appVersion?: string
  * }}
  */
-export function runSchedulePipeline({ availabilityFiles, courseSystemFiles, currentDate } = {}) {
+export function runSchedulePipeline({ availabilityFiles, courseSystemFiles, presetFiles, currentDate } = {}) {
   const availabilityData = (availabilityFiles || []).flatMap(f => f.items);
   const flatCourseSystemData = (courseSystemFiles || []).flatMap(f => f.items);
+  const flatPresetData = (presetFiles || []).flatMap(f => f.items);
 
   const result = generateSchedule({
     currentDate: effectiveDate(currentDate),
     availabilityData,
-    courseSystemData: flatCourseSystemData
+    courseSystemData: flatCourseSystemData,
+    presetData: flatPresetData
   });
   if (!result.ok) return { ok: false, error: result.error };
 
@@ -62,7 +68,7 @@ export function runSchedulePipeline({ availabilityFiles, courseSystemFiles, curr
     year,
     month,
     reportAt: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
-    algorithmVersion: ALGORITHM_VERSION
+    appVersion: APP_VERSION
   };
   const report = {
     id: `report-${now.getTime()}`,
@@ -71,7 +77,7 @@ export function runSchedulePipeline({ availabilityFiles, courseSystemFiles, curr
     fileName: scheduleReportFileName(now, year, month),
     content: buildScheduleReportMarkdown(reportMeta, result),
     generatedAt: now.toISOString(),
-    algorithmVersion: ALGORITHM_VERSION,
+    appVersion: APP_VERSION,
     successCount: result.successCount,
     failedCount: result.failedCount
   };
@@ -87,7 +93,7 @@ export function runSchedulePipeline({ availabilityFiles, courseSystemFiles, curr
     successCount: result.successCount,
     failedCount: result.failedCount,
     diagnostics: result.diagnostics,
-    algorithmVersion: ALGORITHM_VERSION
+    appVersion: APP_VERSION
   };
 }
 

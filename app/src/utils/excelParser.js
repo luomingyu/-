@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { formatExcelDate, formatExcelTime } from './dateUtils.js';
 import { normalizeClassType } from './classType.js';
 import { classifyClassType } from './classRegistry.js';
+import { analyzeSheetForms } from './sheetForm.js';
 
 /** 读取文件为 workbook */
 function readWorkbook(file) {
@@ -88,9 +89,11 @@ export async function parseAvailabilitySheet(file) {
  * 未识别班级保留原值并收集警告（宽松模式，排课照常）
  * 其余列按表头关键字查找：课程名称 / 师资名称 / 时长 / 起始日期 / 终止日期
  * 起始/终止日期为可选列；填写后仅在该日期区间内排课
- * @returns {Promise<{list: Array, warnings: Array<string>}>}
+ * @returns {Promise<{list: Array, warnings: Array<string>, mixedSheets: Array<Object>}>}
  *   list 元素：{classType, courseName, teacher, duration, startDate, endDate, scheduled, sheetIndex}
  *   warnings 元素：未识别班级提示（含其出现过的全部子表名），按原始班级名去重
+ *   mixedSheets 元素：混合形态子表（先分后合与先合后分并存，v5.83 暂不做排课处理），
+ *   形如 {sheetKey, sheetName, sheetIndex, totalCourses, mergeCount, preCount, postCount, reason}
  */
 export async function parseCourseSystemSheet(file) {
   const workbook = await readWorkbook(file);
@@ -170,10 +173,130 @@ export async function parseCourseSystemSheet(file) {
     throw new Error('Excel文件内容为空或格式不正确');
   }
 
-  // 统一生成未识别班级提示：点名具体子表（同一班级跨多子表时全部列出）
+  // 统一生成未识别班级提示：点名具体子表（同一班级跨多子表时合并提示）
   const warnings = [...warnedRawClass.entries()].map(([rawClassType, sheetNames]) =>
     `未识别班级「${rawClassType}」已保留原值（子表：${[...sheetNames].join('、')}）`
   );
 
-  return { list, warnings };
+  // v5.83：形态判定（与排课侧共享 analyzeSheetForms，规则单一来源）——
+  // 混合形态子表（既有合班课之前的普通课、又有合班课之后的普通课）暂不做排课处理，
+  // 上传页标红警告（不拦截导入），排课侧跳过并写入报告第八章。
+  const { mixedSheets } = analyzeSheetForms(list);
+
+  return { list, warnings, mixedSheets };
+}
+
+/**
+ * 解析已排课表（v5.90）：已排课表为**跨科目占用约束**——声明「某班级在某日期某时间段
+ * 已有课程」（可选记录「师资」）。排课时做班级 + 师资双维度互斥：
+ *   班级维度（始终）：同一班级同一时间段只能上一门课；
+ *   师资维度（v5.91，师资列非空）：同一师资同一时间段不能上两门课，按前后各
+ *     Y（AVAIL_REMOVE_PAD_TEACHER）分钟缓冲扣除。与课程体系表科目隔离。
+ * 支持多 sheet；班级列取子表第一列（A 列，索引 0，与课程体系表一致），
+ * 归类到标准班级（可用 customHeaderxls/classRegistry）失败时保留原值并收集警告。
+ * 授课时间支持两种写法：独立的「开始时间/结束时间」两列，或单列「授课时间」
+ * 形如 "17:00-19:00"（中英文连字符均可）。
+ * @returns {Promise<{list: Array, warnings: Array<string>}>}
+ *   list 元素：{classType, courseName, teacher, date, startTime, endTime, sheetIndex, sheetName, orderInSheet}
+ *   warnings 元素：未识别班级提示（含其出现过的全部子表名），按原始班级名去重
+ */
+export async function parsePresetSheet(file) {
+  const workbook = await readWorkbook(file);
+  const list = [];
+  const warnedRawClass = new Map();
+  // 日期无法解析的行：跳过并提示（避免写入 "NaN-NaN-NaN" 导致页面上看不到）
+  const dateWarnings = [];
+
+  const pickTimeRange = (row, startIndex, endIndex, rangeIndex, headers, rowIdx, sheetName) => {
+    const result = { startTime: '', endTime: '', warn: '' };
+    if (startIndex !== -1 && endIndex !== -1) {
+      result.startTime = formatExcelTime(row[startIndex]);
+      result.endTime = formatExcelTime(row[endIndex]);
+    }
+    if ((!result.startTime || !result.endTime) && rangeIndex !== -1 && row[rangeIndex] != null) {
+      // 单列授课时间形如 "17:00-19:00" / "17:00~19:00"
+      const text = String(row[rangeIndex]).trim();
+      const mm = text.match(/^\s*(\d{1,2}:\d{2})\s*(?:-|–|~|至)\s*(\d{1,2}:\d{2})\s*$/);
+      if (mm) {
+        result.startTime = formatExcelTime(mm[1]);
+        result.endTime = formatExcelTime(mm[2]);
+      } else {
+        result.warn = `第 ${rowIdx + 1} 行「授课时间」无法解析：${text}`;
+      }
+    }
+    return result;
+  };
+
+  for (let sheetIdx = 0; sheetIdx < workbook.SheetNames.length; sheetIdx++) {
+    const sheetName = workbook.SheetNames[sheetIdx];
+    const rows = parseSheet(workbook.Sheets[sheetName]);
+    if (rows.length === 0) continue;
+
+    const headers = rows[0].map(h => String(h).trim());
+    // 班级列固定取子表第一列（A 列，索引 0，与课程体系表 v5.73 一致）
+    const classTypeIndex = 0;
+    const courseNameIndex = findColumnIndex(headers, ['课节名称', '课节', '课程名称', '课程']);
+    const teacherIndex = findColumnIndex(headers, ['师资', '老师', '教师', '姓名']);
+    const dateIndex = findColumnIndex(headers, ['授课日期', '上课日期', '日期']);
+    const startTimeIndex = findColumnIndex(headers, ['开始', '起始']);
+    const endTimeIndex = findColumnIndex(headers, ['结束', '终止']);
+    const rangeTimeIndex = findColumnIndex(headers, ['授课时间', '上课时间', '时间']);
+
+    if (dateIndex === -1) continue;
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row[classTypeIndex] && !row[dateIndex]) continue;
+
+      const rawClassType = normalizeClassType(row[classTypeIndex]);
+      if (!rawClassType) continue;
+
+      // 归类到标准班级（utils/classRegistry.js）；失败保留原值并警告
+      const className = classifyClassType(rawClassType);
+      const classType = className || rawClassType;
+      if (className === null) {
+        if (!warnedRawClass.has(rawClassType)) warnedRawClass.set(rawClassType, new Set());
+        warnedRawClass.get(rawClassType).add(sheetName);
+      }
+
+      const courseName = String(row[courseNameIndex] || '').trim();
+      const teacher = teacherIndex !== -1 ? String(row[teacherIndex] || '').trim() : '';
+      const rawDate = row[dateIndex];
+      const date = formatExcelDate(rawDate);
+      const { startTime, endTime, warn } = pickTimeRange(
+        row, startTimeIndex, endTimeIndex, rangeTimeIndex, headers, i, sheetName
+      );
+
+      if (classType && startTime && endTime) {
+        // 日期无法解析时不写入坏数据，收集提示（否则页面按日期匹配不到，表现为「不显示」）
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          dateWarnings.push(`第 ${i + 1} 行「授课日期」无法解析：${String(rawDate ?? '').trim() || '(空)'}（子表：${sheetName}）`);
+          continue;
+        }
+        list.push({
+          classType,
+          courseName,
+          teacher,
+          date,
+          startTime,
+          endTime,
+          sheetIndex: sheetIdx,
+          sheetName,
+          orderInSheet: i - 1,
+          warnings: warn ? [warn] : []
+        });
+      }
+    }
+  }
+
+  const warnings = [...warnedRawClass.entries()].map(([rawClassType, sheetNames]) =>
+    `未识别班级「${rawClassType}」已保留原值（子表：${[...sheetNames].join('、')}）`
+  );
+
+  list.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.startTime.localeCompare(b.startTime);
+  });
+
+  return { list, warnings: [...dateWarnings, ...warnings] };
 }

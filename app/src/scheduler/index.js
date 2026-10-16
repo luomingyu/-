@@ -3,17 +3,23 @@
 //  ① 子表间：含合班课的子表优先，其内按课程数量降序排课（数量多的子表优先）
 //  ② 子表内：严格按行顺序（orderInSheet）排课，日期递增；合班课与所在子表课程体系顺序
 //     一起排课（v5.34），不再独立于子表穿插
-//  ③ 合班课：按「课程名称+师资」识别，先排的子表确定日期，
+//  ③ 合班课：按「班级名称（班型）+课程名称」识别（v5.75），先排的子表确定日期，
 //     后处理的子表自动对齐该日期（不重复排）；后子表中位于合班课之前的普通课，
 //     限定在该合班课日期之前排课（从本月初到第一个合班课日期前一天），
 //     其余课程通过班级冲突检测避开合班课日期
 import { durationToMinutes, timeToMinutes, minutesToTime } from '../utils/dateUtils.js';
-import { hasMultipleClasses, splitClassTypes } from '../utils/classType.js';
+import { splitClassTypes, normalizeClassType } from '../utils/classType.js';
+import { isMergeCourse, analyzeSheetForms, buildFormMap } from '../utils/sheetForm.js';
 import { MIN_GAP, AVAIL_REMOVE_PAD } from './constants.js';
-import { createScheduleContext, registerSlot, hasAnyFeasibleSlot, buildTeacherClassAvailability } from './scheduleContext.js';
+import { createScheduleContext, registerSlot, registerPresetClassSlots, hasAnyFeasibleSlot, buildTeacherClassAvailability } from './scheduleContext.js';
 import { tryScheduleCourse } from './trySchedule.js';
 import { findBestDispersionPlan } from './dispersion.js';
 import { getSubjectOfTeacher, getSubjectPriority } from '../config/constants.js';
+
+// v5.75：合班课跨子表对齐键 —— 班级名称（班型）一致 + 课程名称一致 才视为同一门合班课
+// （此前为「课程名称|师资」；班型经 normalizeClassType 规范化，班级顺序不同（如
+// 「27OMO,28OMO」与「28OMO,27OMO」）也视为同一班型）
+const getMergeKey = (item) => `${item.courseName}|${normalizeClassType(item.classType)}`;
 
 /**
  * 计算师资难易程度与师资理论排课次序（v5.11 难易程度评估 + v5.25 科目师资表，v5.36 重新接入排课）
@@ -23,7 +29,7 @@ import { getSubjectOfTeacher, getSubjectPriority } from '../config/constants.js'
  *   - 无空闲时间的师资 → Infinity（∞）→ 该科目内最优先排课
  *
  * 师资排课顺序（先科目确立大体顺序，科目内按难易程度定最终顺序）：
- *   ① 先科目：英语 > 政治 > 数学 > 未收录科目（SUBJECT_PRIORITY，config/constants.js）
+ *   ① 先科目：英语 > 政治 > 数学 > 408计算机 > 未收录科目（SUBJECT_PRIORITY，config/constants.js）
  *   ② 科目内：难易程度降序（难排的师资先排）
  *
  * @param {Array} availabilityData 师资空闲时间表 [{teacher, date, startTime, endTime}]
@@ -53,7 +59,7 @@ function buildTeacherRanking(availabilityData, courseSystemData) {
     return {
       teacher: t,
       subject: getSubjectOfTeacher(t),       // null = 未收录科目
-      subjectPriority: getSubjectPriority(t), // 英语0 < 政治1 < 数学2 < 未收录3
+      subjectPriority: getSubjectPriority(t), // 英语0 < 政治1 < 数学2 < 408计算机3 < 未收录4
       courseMinutes: courseMinutes[t] || 0,
       availMinutes: avail,
       difficulty                             // Infinity = 无空闲时间（最优先）
@@ -107,6 +113,28 @@ export function generateSchedule(state) {
   // 创建全局排课上下文（所有班级共享，跟踪师资跨班级日程）
   const ctx = createScheduleContext(monthAvailability);
 
+  // v5.90：预注册「已排课表」占用（跨科目班级互斥约束）。
+  // 已排课表条目 {classType, teacher, courseName, date, startTime, endTime} 与本排课业务课程
+  // 科目隔离，仅声明「某班级/某师资某日期某时间段已有课程」。
+  // v5.91：升级为「班级 + 师资」双维度占用——
+  //   班级维度：始终写入，同一班级同一时间段只能上一门课；
+  //   师资维度：师资列非空时写入，该师资时段按前后各 Y（AVAIL_REMOVE_PAD_TEACHER）分钟缓冲扣除，
+  //             同一师资同一时间段不能上两门课。
+  // 两维度均只做时间窗（含缓冲）互斥，不写 teacherClassScheduleByDate，
+  // 因此不触发「每天至多一节」。空/缺省时零影响（回归兼容）。
+  const presetScheduleData = Array.isArray(state.presetData) ? state.presetData : [];
+  for (const p of presetScheduleData) {
+    if (p && p.classType && p.date && p.startTime && p.endTime) {
+      registerPresetClassSlots(ctx, {
+        classType: p.classType,
+        teacher: p.teacher,
+        date: p.date,
+        startTime: p.startTime,
+        endTime: p.endTime
+      });
+    }
+  }
+
   // v5.41：以子表为单位的整体分散方案（锚点日期）
   // 合班课与所在子表前面的普通课程共享同一套分散锚点序列，保证子表全部课程
   // （普通课 + 合班课）整体均匀分散；排课时把每门课吸引到预计算的最优分散日期，
@@ -118,30 +146,47 @@ export function generateSchedule(state) {
 
   // ================================================================
   // 2. 师资难易程度评估 + 师资理论排课次序（v5.36 接入排课）：
-  //    先按科目确立大体师资顺序（英语>政治>数学>未收录科目），
+  //    先按科目确立大体师资顺序（英语>政治>数学>408计算机>未收录科目），
   //    科目内再按难易程度降序确定最终师资排课顺序（难排的师资优先排课）
   // ================================================================
   const teacherRanking = buildTeacherRanking(monthAvailability, newCourseSystemData);
   const teacherRankIndex = new Map(teacherRanking.map((r, i) => [r.teacher, { ...r, order: i + 1 }]));
 
   // ================================================================
-  // 3. 合班课识别（v5.27/v5.30）：
-  const isMergeCourse = (item) =>
-    (item.mergeNote && String(item.mergeNote).includes('合班')) ||
-    hasMultipleClasses(item.classType);
+  // 3. 合班课识别 + 子表形态判定（v5.27/v5.30/v5.83）：
+  //    isMergeCourse 判定已抽离到 utils/sheetForm.js（识别规则同 v5.27/v5.30，
+  //    index.js / dispersion.js / 上传页解析共用同一实现）。
+  //    子表形态 = 按子表内课程行序（orderInSheet）静态判定（不依赖排课过程）：
+  //      先分后合 pre-merge（普通课在首个合班课之前）→ 既有三约束
+  //         （尾段预留 tailReserve / 合班课之后截断 cutAfter / 日期上界 latestDate）
+  //      先合后分 post-merge（普通课在末个合班课之后）→ 新建三约束
+  //         （头段预留 headReserve / 合班课之前截断 cutBefore / 日期下界 earliestDate）
+  //      混合 mixed（合班课前后都有普通课）→ 暂不做排课处理：跳过排课 + 报错
+  //         （排课报告第八章 + 上传课程体系表页面标红）
+  //      none（无合班课）→ 约束保持原样；全合班课子表 → 归入 post-merge（约束无害）
+  // ================================================================
+  const { forms: sheetForms, mixedSheets } = analyzeSheetForms(newCourseSystemData);
+  const sheetFormMap = buildFormMap(sheetForms);
 
   // ================================================================
-  // 4. 子表分组 + 排序（v5.30 / v5.34 / v5.37）：
+  // 4. 子表分组 + 排序（v5.30 / v5.34 / v5.37 / v5.88）：
   //    按 sheetName 分组，组内按 orderInSheet 严格排序；
   //    子表间顺序（v5.37，按师资排课顺序）：
-  //      ① 先按师资排课顺序遍历师资（先科目：英语>政治>数学>未收录科目；
+  //      ① 先按师资排课顺序遍历师资（先科目：英语>政治>数学>408计算机>未收录科目；
   //         科目内难易程度降序，难排的师资优先，见 2. 师资难易程度评估）
-  //      ② 每位师资的所有子表按课程数量降序（数量多的子表优先排课）
-  //      ③ 数量相同时按子表出现顺序
-  //      ④ 无归属师资的子表（课程无师资字段）按出现顺序兜底排最后
+  //      ② 同一师资的多个子表按「时间密度 L = M / N」升序（v5.88，见下）
+  //      ③ L 相同时按课程数量降序
+  //      ④ 再相同时按子表出现顺序
+  //      ⑤ 无归属师资的子表（课程无师资字段）按出现顺序兜底排最后
   //    子表归属师资 = 子表内课时数最多的师资；课时数相同取师资理论排课次序更靠前者。
-  //    例：师资 A 的课程在子表 1/2/3/4，按课程数量降序 → 子表 2,4,1,3；
-  //        师资 B 的课程在子表 5/7 → 子表 5,7；整体排课次序 = 子表 2,4,1,3,5,7,…
+  //
+  //    v5.88 时间密度 L = M / N（替换 v5.37「同师资子表按课程数量降序」）：
+  //      N = 该子表全部课程数；
+  //      M = 该子表中「起始日期」与「终止日期」均非空的行：最晚终止日期 − 最早起始日期 + 1 天
+  //          （含首尾，如 10-01~10-10 = 10 天）；缺任一日期的行跳过；全缺则该子表 L = ∞ 排最后。
+  //      L 越小 = 单位课程可用天数越少 = 排课越紧张 → 越优先排课。
+  //    例：师资 A 的课程在子表 1/2/3/4，L 分别为 6.0/3.0/4.5/∞（按 L 升序）→ 子表 2,3,1,4；
+  //        师资 B 的课程在子表 5/7 → 子表 5,7；整体排课次序 = 子表 2,3,1,4,5,7,…
   // ================================================================
   const sheetMap = new Map();
   newCourseSystemData.forEach((item, index) => {
@@ -172,14 +217,19 @@ export function generateSchedule(state) {
     return best;
   };
 
-  const sheetGroups = [...sheetMap.entries()].map(([sheetName, courses]) => ({
-    sheetName,
-    sheetIndex: courses[0].sheetIndex ?? 0,
-    owner: sheetOwnerOf(courses),
-    courses: courses.sort((a, b) => (a.orderInSheet ?? 0) - (b.orderInSheet ?? 0))
-  }));
+  const sheetGroups = [...sheetMap.entries()].map(([sheetName, courses]) => {
+    const sorted = courses.sort((a, b) => (a.orderInSheet ?? 0) - (b.orderInSheet ?? 0));
+    return {
+      sheetName,
+      sheetIndex: courses[0].sheetIndex ?? 0,
+      owner: sheetOwnerOf(courses),
+      courses: sorted,
+      // v5.88：时间密度 L = M/N（同师资子表按 L 升序优先排课，见下方排序）
+      ...computeSheetDensity(sorted)
+    };
+  });
 
-  // 按师资排课顺序排子表（v5.37）：师资A 的子表（课程数量降序）→ 师资B 的子表（课程数量降序）→ …
+  // 按师资排课顺序排子表（v5.37 / v5.88）：师资A 的子表（时间密度 L 升序）→ 师资B 的子表 → …
   const sheetsByOwner = new Map(); // teacher -> [{sheetName, sheetIndex, courses}]
   const leftoverSheets = [];
   for (const s of sheetGroups) {
@@ -195,7 +245,9 @@ export function generateSchedule(state) {
     const sheets = sheetsByOwner.get(r.teacher);
     if (!sheets || sheets.length === 0) continue;
     sheets.sort((a, b) => {
-      // 课程数量降序（数量多的子表优先排课）；数量相同按子表出现顺序
+      // v5.88：时间密度 L = M/N 升序（单位课程可用天数越少越紧张，越优先排课）；
+      // L 相同 → 课程数量降序；再相同 → 子表出现顺序。L = ∞ 的子表自然排最后。
+      if (a.l !== b.l) return a.l - b.l;
       if (b.courses.length !== a.courses.length) return b.courses.length - a.courses.length;
       return (a.sheetIndex ?? 0) - (b.sheetIndex ?? 0);
     });
@@ -208,7 +260,21 @@ export function generateSchedule(state) {
     teacherStats: [],
     classStats: [],
     sheetStats: [],
-    schedulingOrder: sortedSheets.map(s => `${s.sheetName}(${s.courses.length}门)`),
+    // v5.90：已排课表统计（跨科目班级占用约束）：记录预注册的占用槽，供排课报告第九章展示
+    presetStats: presetScheduleData.map((p, i) => ({
+      order: i + 1,
+      classType: p.classType,
+      courseName: p.courseName || '(未填课节名称)',
+      teacher: p.teacher || '',
+      date: p.date,
+      startTime: p.startTime,
+      endTime: p.endTime
+    })),
+    // v5.83：混合形态子表（先分后合与先合后分同时存在）—— 不做排课处理，
+    // 逐子表记录（含合班课数 / 首个合班课之前的普通课数 / 末个合班课之后的普通课数 / 原因），
+    // 供排课报告第八章展示报错
+    mixedSheets: [],
+    schedulingOrder: sortedSheets.map(s => `${s.sheetName}(${s.courses.length}门, M=${s.m ?? '—'}, L=${formatL(s.l)})`),
     // v5.36：师资难易程度评估 + 师资理论排课次序（先科目，科目内难易程度降序）
     teacherOrder: teacherRanking.map((r, i) => ({
       order: i + 1,
@@ -224,16 +290,19 @@ export function generateSchedule(state) {
   // 排课轨迹：逐个课程记录排课决策（含排课时刻的师资-班级空闲时间表快照），供生成排课报告
   const reportSteps = [];
 
-  // 已确定日期的合班课：key = 课程名称|师资 → { date, startTime, endTime, fromSheet }
+  // 已确定日期的合班课：key = 课程名称|班级 → { date, startTime, endTime, fromSheet }
   const mergedScheduleMap = new Map();
 
-  // v5.33 / v5.34：合班课跨子表递增补充约束
+  // v5.33 / v5.34：合班课跨子表递增补充约束（历史沿革）
   // v5.33 曾让合班课脱离所在子表课程顺序，独立于同班普通课日期递增（导致合班课如
   // Sheet5 中「证明题（一）」早于其行序之前的 8 门高数课）。v5.34 起合班课回归
-  // 「与所在子表课程体系顺序一起排课」：递增约束取「子表内同班的上一门课程日期」
-  // 与「该师资最近一门合班课日期」的较大值——先排的含合班课子表（课程最多者）整体
-  // 排课确定日期，后表合班课对齐该日期，跨子表合班课顺序不会回退。
-  const lastMergeDateByTeacher = {};
+  // 「与所在子表课程体系顺序一起排课」：递增约束取「子表内同班的上一门课程日期」。
+  // v5.74 曾按「班级」维度维护跨子表合班课推进日期（mergeDateLatestByClass，
+  // 有公共班级的子表跨表递增）；v5.82 因「最终排课结果必须与选中策略一致」将其移除：
+  // 跨表推进会把后子表合班课硬锁到前子表（同班）月末，而模拟分散方案（选中策略）
+  // 无此约束，导致选中策略不可落（如 Sheet1 选中 10-04/09/14/19/23/28、实际排成
+  // 10-25~31）。现仅保留同名合班课去重对齐（mergedScheduleMap，后表同名合班课
+  // 直接对齐前表日期），跨子表推进不再作为排课约束。
 
   // v5.57：排课轨迹记录 —— 已成功排课课程按来源子表分组（供报告展示「各子表排第一节课时，
   // 师资-班级空闲时间表已减去的来源子表课程」）；sheetFirstLessons 逐子表记录第一门实际排课
@@ -245,6 +314,41 @@ export function generateSchedule(state) {
   // 4. 逐子表排课（子表内严格按行顺序）
   // ================================================================
   for (const sheet of sortedSheets) {
+    // v5.83：子表形态判定 —— 混合形态（先分后合与先合后分同时存在）暂不做排课处理，
+    // 跳过排课并报错（排课报告第八章 + 上传课程体系表页面标红），其余形态正常排课。
+    const form = sheetFormMap.get(sheet.sheetName) || 'none';
+    if (form === 'mixed') {
+      const mixItem = mixedSheets.find(m => m.sheetKey === sheet.sheetName) || null;
+      const mixRec = {
+        sheetName: sheet.sheetName,
+        sheetIndex: sheet.sheetIndex,
+        totalCourses: sheet.courses.length,
+        mergeCount: mixItem ? mixItem.mergeCount : 0,
+        preCount: mixItem ? mixItem.preCount : 0,
+        postCount: mixItem ? mixItem.postCount : 0,
+        reason: mixItem ? mixItem.reason : '子表既有合班课之前的普通课又有合班课之后的普通课，先分后合与先合后分同时存在'
+      };
+      diagnostics.mixedSheets.push(mixRec);
+      diagnostics.sheetStats.push({
+        sheetName: sheet.sheetName,
+        sheetIndex: sheet.sheetIndex,
+        totalCourses: sheet.courses.length,
+        // v5.88：时间密度 L = M/N（M 含首尾天数；无齐备日期行则 M=null、L=∞）
+        m: sheet.m,
+        n: sheet.n,
+        l: sheet.l,
+        scheduled: 0,
+        aligned: 0,
+        failed: sheet.courses.length,
+        teachers: [...new Set(sheet.courses.map(c => c.teacher))],
+        mixed: true,
+        mergeCount: mixRec.mergeCount,
+        preCount: mixRec.preCount,
+        postCount: mixRec.postCount
+      });
+      console.log(`[子表跳过] ${sheet.sheetName}：混合形态（先分后合与先合后分同时存在），暂不做排课处理（详见排课报告第八章）`);
+      continue;
+    }
     console.log(`\n=== 子表: ${sheet.sheetName}（${sheet.courses.length} 门课程，严格按行顺序排课）===`);
 
     // v5.49：首次排含合班课子表 —— 计算合班课占比并预留该月尾段日期给合班课
@@ -257,8 +361,9 @@ export function generateSchedule(state) {
     // 后续子表同名合班课直接对齐，不再重复预留。
     let tailReserve = null;
     {
-      const mergeCoursesInSheet = sheet.courses.filter(c => isMergeCourse(c));
-      const firstTimeMerge = mergeCoursesInSheet.find(c => !mergedScheduleMap.has(`${c.courseName}|${c.teacher}`));
+      // v5.83：尾段预留仅对「先分后合」侧（pre-merge，普通课在前、合班课在后）生效
+      const mergeCoursesInSheet = form === 'pre-merge' ? sheet.courses.filter(c => isMergeCourse(c)) : [];
+      const firstTimeMerge = mergeCoursesInSheet.find(c => !mergedScheduleMap.has(getMergeKey(c)));
       if (firstTimeMerge && sheet.courses.length > 1) {
         const mergeCount = mergeCoursesInSheet.length;
         // 尾段比例 N = 合班课数量 ÷ 子表总课数量 × 130%；尾段天数 = 当月天数 × N，取整
@@ -275,20 +380,51 @@ export function generateSchedule(state) {
       }
     }
 
+    // v5.83：头段预留（先合后分侧，严格镜像 tailReserve v5.49）——
+    // 首次排「先合后分」（post-merge）子表时，按「合班课数 ÷ 子表总课数 × 130%」计算头段比例，
+    // 头段天数 = 当月天数 × N，取整；生成师资-班级空闲时间表时，将该月前该比例日期中
+    // 「合班课其他班级」已排课程时间一并扣除，使子表内普通课避开头段，为合班课
+    // （需多个班级同时空闲）腾出位置。
+    // 仅首次排课生效：本子表合班课日期一旦确定（mergedScheduleMap），后续子表同名
+    // 合班课直接对齐，不再重复预留（与 tailReserve 对称）。
+    let headReserve = null;
+    {
+      const mergeCoursesInSheet = form === 'post-merge' ? sheet.courses.filter(c => isMergeCourse(c)) : [];
+      const firstTimeMerge = mergeCoursesInSheet.find(c => !mergedScheduleMap.has(getMergeKey(c)));
+      if (firstTimeMerge && sheet.courses.length > 1) {
+        const mergeCount = mergeCoursesInSheet.length;
+        const ratio = (mergeCount / sheet.courses.length) * 1.3;
+        const headCount = Math.min(allMonthDates.length - 1, Math.max(1, Math.round(allMonthDates.length * ratio)));
+        const headDates = allMonthDates.slice(0, headCount);
+        const mergeClasses = new Set();
+        for (const c of mergeCoursesInSheet) {
+          for (const cls of splitClassTypes(c.classType)) mergeClasses.add(cls);
+        }
+        headReserve = { dates: headDates, otherClasses: [...mergeClasses] };
+        console.log(`  [头段预留 v5.83] ${sheet.sheetName}：合班课 ${mergeCount}/${sheet.courses.length} 门（占比 ${Math.round((mergeCount / sheet.courses.length) * 100)}% × 130% = ${(ratio * 100).toFixed(2)}% → 该月前 ${headCount} 天：${headDates[0]} ~ ${headDates[headDates.length - 1]} 中合班课其他班级已排时间）`);
+      }
+    }
+
     // v5.59：已排日期合班课之后截断（cutAfter）——
     // 若本子表含有「已排日期」的合班课（mergedScheduleMap 命中，日期由先前排课的子表确定，
     // 或本子表内先排的合班课已定日期），则在生成本子表师资-班级空闲时间表时，
     // 删除该子表第一个合班课时间段之后的所有空闲时间（用户规则：如合班课 8/22 17:00-19:00
     // 与 8/25 07:00-09:00，则删除所有 8/22 16:55——开始时间−AVAIL_REMOVE_PAD 分钟——之后
     // 的空闲时间），使本子表普通课的候选时间域收缩到第一个合班课之前。
+    // v5.84：形态 gating —— 仅「先分后合」侧（pre-merge，普通课在前、合班课在后）生效，
+    // 与 cutBefore 的形态 gating（form === 'post-merge'）严格对称：先合后分（post-merge）
+    // 子表普通课排在合班课之后，cutAfter 会把其本应保留的候选域误删导致排课失败
+    // （如后端 Sheet5(2) 4 门 27全程2期 高数课全部失败），自 v5.83 形态分流起应带形态判断。
     // 注意：仅在「排课开始前已确定」的第一个合班课生效（合班课行本身不受此约束——
     // 后表合班课走对齐排课、不消耗此空闲表；本子表首次定日期的合班课排课时其日期尚未
     // 确定，cutAfter 为 null，不会把后续合班课排死）。
     let sheetCutAfter = null;
     {
-      const firstFixedMerge = sheet.courses.find(c => isMergeCourse(c) && mergedScheduleMap.has(`${c.courseName}|${c.teacher}`));
+      const firstFixedMerge = form === 'pre-merge'
+        ? sheet.courses.find(c => isMergeCourse(c) && mergedScheduleMap.has(getMergeKey(c)))
+        : null;
       if (firstFixedMerge) {
-        const fixed = mergedScheduleMap.get(`${firstFixedMerge.courseName}|${firstFixedMerge.teacher}`);
+        const fixed = mergedScheduleMap.get(getMergeKey(firstFixedMerge));
         sheetCutAfter = {
           date: fixed.date,
           startTime: minutesToTime(Math.max(0, timeToMinutes(fixed.startTime) - AVAIL_REMOVE_PAD)),
@@ -302,11 +438,41 @@ export function generateSchedule(state) {
       }
     }
 
+    // v5.83：已排日期合班课之前截断（cutBefore，先合后分侧，严格镜像 cutAfter v5.59）——
+    // 若本子表含有「已排日期」的合班课（mergedScheduleMap 命中，日期由先前排课的子表确定，
+    // 或本子表内先排的合班课已定日期），则在生成本子表师资-班级空闲时间表时，
+    // 删除「该子表行序最后一个已定日期合班课 结束时间 + AVAIL_REMOVE_PAD 分钟」之前的所有
+    // 空闲时间，使本子表普通课的候选时间域收缩到最后一个合班课之后（普通课在后段排课）。
+    // 注意：仅在「排课开始前已确定」的合班课生效（合班课行本身不受此约束——后表合班课走
+    // 对齐排课、不消耗此空闲表；本子表首次定日期的合班课排课时其日期尚未确定，cutBefore 为
+    // null，不会把后续合班课排死），与 cutAfter 严格对称。
+    let sheetCutBefore = null;
+    {
+      let lastFixedMerge = null;
+      for (let i = sheet.courses.length - 1; i >= 0; i--) {
+        const c = sheet.courses[i];
+        if (isMergeCourse(c) && mergedScheduleMap.has(getMergeKey(c))) { lastFixedMerge = c; break; }
+      }
+      if (lastFixedMerge && form === 'post-merge') {
+        const fixed = mergedScheduleMap.get(getMergeKey(lastFixedMerge));
+        sheetCutBefore = {
+          date: fixed.date,
+          endTime: minutesToTime(timeToMinutes(fixed.endTime) + AVAIL_REMOVE_PAD),
+          courseName: lastFixedMerge.courseName,
+          classType: lastFixedMerge.classType,
+          mergeDate: fixed.date,
+          mergeEnd: fixed.endTime,
+          fromSheet: fixed.fromSheet
+        };
+        console.log(`  [合班课截断 v5.83] ${sheet.sheetName}：已排日期合班课「${lastFixedMerge.courseName}」（${fixed.date} ${fixed.endTime}，日期由「${fixed.fromSheet}」确定）之前的空闲时间全部删除（切割时刻 ${sheetCutBefore.date} ${sheetCutBefore.endTime}，即结束时间+${AVAIL_REMOVE_PAD} 分钟缓冲）`);
+      }
+    }
+
     // v5.58：每张子表排课前，基于「当前全局 ctx（已含先前子表排课的师资/班级时段占用 +
     // 本子表尾段预留）」重新生成该子表的整体分散锚点方案 —— 所有模拟排课策略均在
     // 「该子表排课瞬间的师资-班级空闲时间表」基础上模拟，模拟槽位不会落在真实空闲表之外。
     {
-      const builtPlans = buildDispersionPlans(newCourseSystemData, monthAvailability, allMonthDates, ctx, tailReserve, sheet.sheetName, sheetCutAfter, mergedScheduleMap);
+      const builtPlans = buildDispersionPlans(newCourseSystemData, monthAvailability, allMonthDates, ctx, tailReserve, sheet.sheetName, sheetCutAfter, mergedScheduleMap, headReserve, sheetCutBefore);
       const sheetPlan = builtPlans.get(sheet.sheetName);
       if (sheetPlan) dispersionPlans.set(sheet.sheetName, sheetPlan);
       if (!!process.env.SCHEDULE_DEBUG) {
@@ -338,12 +504,8 @@ export function generateSchedule(state) {
         prevDateByClass[cls] = cur && cur > date ? cur : date;
       }
     };
-    const advanceMergeDate = (teacher, date) => {
-      // 实验开关：NO_MERGE_ADVANCE=1 时禁用跨子表合班课日期推进（诊断用）
-      if (process.env.NO_MERGE_ADVANCE === '1') return;
-      const cur = lastMergeDateByTeacher[teacher];
-      lastMergeDateByTeacher[teacher] = cur && cur > date ? cur : date;
-    };
+    // v5.82：跨子表合班课推进（advanceMergeDate / getGlobalMergePrev）已移除，
+    // 详见 L235 区域注释 —— 主排与模拟分散方案约束一致，选中策略即最终排课。
 
     // v5.34：后处理子表中，位于「已确定日期合班课」之前的普通课，
     // 须限定在该合班课日期之前排课（用户规则：从本月初到第一个合班课日期前一天）。
@@ -358,11 +520,29 @@ export function generateSchedule(state) {
     for (let i = sheet.courses.length - 1; i >= 0; i--) {
       const c = sheet.courses[i];
       if (isMergeCourse(c)) {
-        const fixed = mergedScheduleMap.get(`${c.courseName}|${c.teacher}`);
+        const fixed = mergedScheduleMap.get(getMergeKey(c));
         if (fixed) nextMergeDate = fixed.date;
         mergeUpperBefore.set(c, null);
       } else {
         mergeUpperBefore.set(c, nextMergeDate ? dayBefore(nextMergeDate) : null);
+      }
+    }
+
+    // v5.83：日期下界（先合后分侧，严格镜像 mergeUpperBefore 上界）——
+    // 正序（行序）扫描：普通课取「其前最近一个已确定日期合班课」的日期后一天作为下界；
+    // 合班课行自身不受此下界约束（后表合班课走对齐，本子表首次定日期时下界未知）。
+    // 与 mergeUpperBefore 对称：上界用 dayBefore（不晚于合班课日期前一天），
+    // 下界用 dayAfter（不早于合班课日期后一天）。
+    const mergeLowerAfter = new Map(); // courseItem -> earliestDate（合班课日期后一天）
+    let prevMergeDate = null;
+    for (let i = 0; i < sheet.courses.length; i++) {
+      const c = sheet.courses[i];
+      if (isMergeCourse(c)) {
+        const fixed = mergedScheduleMap.get(getMergeKey(c));
+        if (fixed) prevMergeDate = fixed.date;
+        mergeLowerAfter.set(c, null);
+      } else {
+        mergeLowerAfter.set(c, prevMergeDate ? dayAfter(prevMergeDate) : null);
       }
     }
 
@@ -388,12 +568,13 @@ export function generateSchedule(state) {
         phase: '',
         prevDate: null,
         latestDate: null,
+        earliestDate: null,
         note: '',
         availability: [] // 排课时刻的师资-班级空闲时间表快照
       };
 
       // ---- 合班课去重对齐：同一门合班课已在先前子表确定日期 → 不重复排，对齐该日期 ----
-      const mergeKey = `${courseItem.courseName}|${courseItem.teacher}`;
+      const mergeKey = getMergeKey(courseItem);
       // v5.61：子表整体分散方案锚点（槽位与课程一一对应，含已定合班课固定槽），
       // 在对齐分支与正常排课分支共用（对齐课同样消耗其对应槽位序号）
       const planEntry = dispersionPlans.get(sheet.sheetName);
@@ -404,7 +585,6 @@ export function generateSchedule(state) {
         sheetAligned++;
         // 合班课日期参与相关班级的递增链（同班后续课程日期不得早于它）
         advancePrevDates(classes, fixed.date);
-        advanceMergeDate(courseItem.teacher, fixed.date);
         // v5.42：对齐课不再写入课程结果 —— 界面中同一门合班课只显示一次
         //（由先排子表那次排课展示）；时间槽已在先排子表注册，不重复注册；
         // 课程体系表中该行仍标记为已排课（scheduled=true），日期与先排子表一致。
@@ -420,16 +600,18 @@ export function generateSchedule(state) {
       }
 
       // ---- 正常排课（v5.34：合班课与所在子表课程体系顺序一起排课） ----
-      // 递增约束取「子表内同班的上一门课程日期」与「该师资最近一门合班课日期」的较大值；
-      // 普通课取涉及班级中最晚的上一门日期。
-      const sheetPrevDate = getCoursePrevDate(classes);
-      const globalMergePrev = lastMergeDateByTeacher[courseItem.teacher] || null;
-      const prevDate = isMergeCourse(courseItem)
-        ? (sheetPrevDate && globalMergePrev) ? (sheetPrevDate > globalMergePrev ? sheetPrevDate : globalMergePrev)
-          : (sheetPrevDate || globalMergePrev)
-        : sheetPrevDate;
+      // 递增约束取涉及班级中最晚的上一门课程日期（子表内链下界）。
+      // v5.82：选中策略即最终排课 —— 主排与模拟分散方案（不含跨子表合班课推进）约束一致，
+      // 合班课不再并入跨子表推进日期。背景：v5.74 按班级维度推进会把后子表合班课硬锁到
+      // 前子表（同班）月末（如 Sheet3 末课 10-29 → Sheet1 首课下界 10-29，叠加 reserveAfter
+      // 日期预算只能落到 10-25~31），而模拟锚点（选中策略）无此约束选中 10-04/09/14/19/23/28，
+      // 造成「最终排课结果与选中策略不一致」。移除跨子表推进分量后，主排可行域与模拟一致，
+      // 锚点槽位（日期+起止时段全等 slotMatchBonus=10000 直接锁定）即可落为最终排课结果。
+      const prevDate = getCoursePrevDate(classes);
       // 上界：仅后处理子表中位于已定日期合班课之前的普通课生效（其余为 null）
       const latestDate = isMergeCourse(courseItem) ? null : (mergeUpperBefore.get(courseItem) || null);
+      // v5.83：下界 —— 仅先合后分子表中位于已定日期合班课之后的普通课生效（其余为 null）
+      const earliestDate = isMergeCourse(courseItem) ? null : (mergeLowerAfter.get(courseItem) || null);
       // v5.34.2：候选日期紧张（只够排完本课及后续同师资课程）时强制尽早排，
       // 避免分散度偏好把本课拖到偏后日期，占掉后续同师资课程的可用日期
       // v5.50：只统计「排课区间与本课有交集」的后续同师资课程 —— 区间完全错开的
@@ -441,7 +623,7 @@ export function generateSchedule(state) {
         const later = sheet.courses[j];
         if (later.teacher !== courseItem.teacher) continue;
         // 已在先前子表确定日期的合班课仅对齐、不占用新日期，不计入
-        const laterMergeKey = `${later.courseName}|${later.teacher}`;
+        const laterMergeKey = getMergeKey(later);
         if (isMergeCourse(later) && mergedScheduleMap.has(laterMergeKey)) continue;
         if (!rangesOverlap(courseItem, later)) continue; // v5.50：区间不重叠的课程不占用本课日期预算
         reserveAfter++;
@@ -458,9 +640,12 @@ export function generateSchedule(state) {
       // v5.59：合班课行本身不受"第一个合班课之后截断"约束（后表合班课走对齐、本子表首次
       // 定日期时其日期尚未确定），仅普通课的候选时间域收缩到第一个已排日期合班课之前
       const courseCutAfter = isMergeCourse(courseItem) ? null : sheetCutAfter;
-      // v5.72：合班课传入跨子表推进日期（globalMergePrev）与子表内链下界（sheetPrevDate），
-      // 第一阶段失败时可将推进分量逐天前移重试（不越过子表内链下界）；非合班课不启用。
-      const slot = scheduleCourse(ctx, courseItem, monthAvailability, prevDate, latestDate, isMergeCourse(courseItem), reserveAfter, step, preferredSlot, tailReserve, courseCutAfter, isMergeCourse(courseItem) ? globalMergePrev : null, isMergeCourse(courseItem) ? sheetPrevDate : null);
+      // v5.83：合班课行本身不受"最后一个已排日期合班课之前截断"约束（后表合班课走对齐、
+      // 本子表首次定日期时其日期尚未确定），仅普通课的候选时间域收缩到最后一个合班课之后
+      const courseCutBefore = isMergeCourse(courseItem) ? null : sheetCutBefore;
+      // v5.82：跨子表合班课推进已移除（见上方 prevDate 注释），v5.72「跨表分量逐天放松」
+      // 降级不启用；第一阶段失败直接进入第二阶段补排兜底。
+      const slot = scheduleCourse(ctx, courseItem, monthAvailability, prevDate, latestDate, isMergeCourse(courseItem), reserveAfter, step, preferredSlot, tailReserve, courseCutAfter, earliestDate, headReserve, courseCutBefore);
       // v5.57：记录本子表第一门实际排课（非对齐）课程排课瞬间的师资-班级空闲时间表快照，
       // 以及该时刻已从空闲表中扣除的来源（此前各子表已成功排课并注册的课程时段，子表整块
       // 顺序排课时第一课尚无本子表课程占用，故来源均为先前子表）。
@@ -477,6 +662,14 @@ export function generateSchedule(state) {
           slot: slot ? { date: slot.date, startTime: slot.startTime, endTime: slot.endTime } : null,
           availability: (step.availability || []).map(a => ({ ...a })),
           cutAfter: courseCutAfter ? { ...courseCutAfter } : null,
+          // v5.83：先合后分侧镜像记录（头段预留 + 合班课之前截断）
+          cutBefore: courseCutBefore ? { ...courseCutBefore } : null,
+          headReserve: headReserve ? {
+            headCount: headReserve.dates.length,
+            headFrom: headReserve.dates[0],
+            headTo: headReserve.dates[headReserve.dates.length - 1],
+            otherClasses: [...headReserve.otherClasses]
+          } : null,
           tailReserve: tailReserve ? {
             tailCount: tailReserve.dates.length,
             tailFrom: tailReserve.dates[0],
@@ -486,11 +679,15 @@ export function generateSchedule(state) {
           // v5.60：只记录「确实参与本子表第一课空闲表占用扣除」的来源课程
           //（同师资 / 同班级 / 尾段预留其他班级在尾段日期内），此前版本把当时所有
           // 已排子表的全部课程都记为扣除来源，导致报告中出现与本子表师资/班级无关的课程
+          // v5.73：每条来源课程附带 dims（扣除维度），报告第七章据此区分
+          //「师资占用 / 班级占用 / 尾段预留」三种来源
           excluded: [...scheduledBySheet.entries()]
             .map(([sn, arr]) => {
-              const relevant = arr.filter(a => isRelevantExcludedCourse(a, courseItem, tailReserve));
+              const relevant = arr
+                .map(a => ({ course: a, dims: isRelevantExcludedCourse(a, courseItem, tailReserve, headReserve) }))
+                .filter(x => x.dims !== null);
               return relevant.length > 0
-                ? { sheetName: sn, courses: relevant.map(a => ({ ...a })) }
+                ? { sheetName: sn, courses: relevant.map(({ course: a, dims }) => ({ ...a, dims })) }
                 : null;
             })
             .filter(Boolean)
@@ -499,6 +696,7 @@ export function generateSchedule(state) {
       // 记录本步的递增约束取值（供排课报告说明排课逻辑）
       step.prevDate = prevDate;
       step.latestDate = latestDate;
+      step.earliestDate = earliestDate;
       if (slot) {
         commitSlot(ctx, newCourseSystemData, courseItem, courseItem.teacher, slot);
         sheetScheduled++;
@@ -520,7 +718,6 @@ export function generateSchedule(state) {
         step.status = 'scheduled';
         step.slot = { date: slot.date, startTime: slot.startTime, endTime: slot.endTime };
         if (isMergeCourse(courseItem)) {
-          advanceMergeDate(courseItem.teacher, slot.date);
           mergedScheduleMap.set(mergeKey, {
             date: slot.date,
             startTime: slot.startTime,
@@ -551,6 +748,10 @@ export function generateSchedule(state) {
       sheetName: sheet.sheetName,
       sheetIndex: sheet.sheetIndex,
       totalCourses: sheet.courses.length,
+      // v5.88：时间密度 L = M/N（M 含首尾天数；无齐备日期行则 M=null、L=∞）
+      m: sheet.m,
+      n: sheet.n,
+      l: sheet.l,
       scheduled: sheetScheduled,
       aligned: sheetAligned,
       failed: sheetFailed,
@@ -643,6 +844,55 @@ function dayBefore(dateStr) {
 }
 
 /**
+ * 返回指定日期（YYYY-MM-DD）的后一天（v5.83，日期下界，与 dayBefore 对称）
+ */
+function dayAfter(dateStr) {
+  const dt = new Date(dateStr);
+  dt.setDate(dt.getDate() + 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * v5.88：两个 YYYY-MM-DD 的自然日天数差（b − a），UTC 基准避免时区/DST 偏差
+ */
+function dateDiffDays(a, b) {
+  const toMs = (s) => {
+    const [y, m, d] = String(s).split('-').map(Number);
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((toMs(b) - toMs(a)) / 86400000);
+}
+
+/**
+ * v5.88：计算子表的「时间密度」L = M / N（同师资子表按 L 升序优先排课）
+ *   N = 该子表全部课程数；
+ *   M = 该子表中「起始日期」与「终止日期」均非空的行：最晚终止日期 − 最早起始日期 + 1 天（含首尾）；
+ *       缺任一日期的行跳过；全缺则 M = null、L = ∞（排最后）。
+ * @param {Array} courses 子表课程（按行序排列）
+ * @returns {{n:number, m:number|null, l:number, startDate:string|null, endDate:string|null}}
+ */
+function computeSheetDensity(courses) {
+  const n = courses.length;
+  let minStart = null;
+  let maxEnd = null;
+  for (const c of courses) {
+    if (!c.startDate || !c.endDate) continue;
+    if (!minStart || c.startDate < minStart) minStart = c.startDate;
+    if (!maxEnd || c.endDate > maxEnd) maxEnd = c.endDate;
+  }
+  if (!minStart || !maxEnd) return { n, m: null, l: Infinity, startDate: null, endDate: null };
+  const m = Math.max(1, dateDiffDays(minStart, maxEnd) + 1);
+  return { n, m, l: m / n, startDate: minStart, endDate: maxEnd };
+}
+
+/** v5.88：L 值展示文本（∞ → '∞'，否则保留 2 位小数） */
+function formatL(l) {
+  if (l === Infinity) return '∞';
+  if (typeof l !== 'number' || Number.isNaN(l)) return '—';
+  return String(Math.round(l * 100) / 100);
+}
+
+/**
  * v5.50：判断两门课是否可能共用排课日期（排课区间有交集）
  * 区间以各自 startDate/endDate 定义；未填写（null/undefined/''）视为不限（与任何区间相交）。
  * 例：A=[10-08,10-15] 与 B=[10-20,10-31] → B 起点晚于 A 终点，无交集 → false（B 不占用 A 区间的日期）
@@ -706,11 +956,11 @@ function getMonthDates(currentDate, availabilityData) {
  * @param {string|null} onlySheetName 仅构建指定子表（null 时构建全部子表）
  * @param {Object|null} cutAfter 合班课之后截断配置（v5.59，{date, startTime}，随子表传递，
  *        含已排日期合班课的子表生成空闲表时删除第一个合班课之后的所有空闲时间）
- * @param {Map|null} [mergedScheduleMap] 已定日期合班课表（v5.61，courseName|teacher -> 固定槽），
+ * @param {Map|null} [mergedScheduleMap] 已定日期合班课表（v5.61，课程名称|班级 -> 固定槽），
  *        用于把本子表内已定日期合班课作为硬性槽位约束纳入模拟排课
  * @returns {Map<string, {dates: string[], index: number}>} key = sheetName
  */
-function buildDispersionPlans(newCourseSystemData, monthAvailability, allMonthDates, ctx = null, tailReserve = null, onlySheetName = null, cutAfter = null, mergedScheduleMap = null) {
+function buildDispersionPlans(newCourseSystemData, monthAvailability, allMonthDates, ctx = null, tailReserve = null, onlySheetName = null, cutAfter = null, mergedScheduleMap = null, headReserve = null, cutBefore = null) {
   const plans = new Map();
   const groups = new Map();
   for (const c of newCourseSystemData) {
@@ -743,11 +993,11 @@ function buildDispersionPlans(newCourseSystemData, monthAvailability, allMonthDa
       // 完全同源，消除「选中策略展示 vs 最终排课结果」不一致。
       fixedMergeSlots = courses.map(c => {
         if (!mergedScheduleMap) return null;
-        const k = `${c.courseName}|${c.teacher}`;
+        const k = getMergeKey(c);
         const m = mergedScheduleMap.get(k);
         return m ? { date: m.date, startTime: m.startTime, endTime: m.endTime } : null;
       });
-      const plan = findBestDispersionPlan(availableDates, courses.length, courses[0].teacher, monthAvailability, allMonthDates, rangeStart, rangeEnd, courses, ctx, tailReserve, cutAfter, fixedMergeSlots);
+      const plan = findBestDispersionPlan(availableDates, courses.length, courses[0].teacher, monthAvailability, allMonthDates, rangeStart, rangeEnd, courses, ctx, tailReserve, cutAfter, fixedMergeSlots, headReserve, cutBefore);
       if (plan && plan.primary) {
         // v5.52：候选方案明细（各策略评分 + 维度详情 + 模拟槽位序列）随锚点一起保留，
         // 供排课报告展示「各分散策略详情与评分 + 模拟日历表」（candidates 为模拟阶段的方案，
@@ -844,25 +1094,36 @@ function buildDispersionPlans(newCourseSystemData, monthAvailability, allMonthDa
  * 已排课程（v5.49）。三者皆不匹配的课程不会出现在当前子表的空闲表中，故不应列为
  * 「已减去来源子表课程」（此前版本直接记录当时所有已排子表的全部课程，导致报告中
  * 出现与当前子表师资/班级无关的课程）。
+ * v5.73：返回细化的扣除维度列表（而非布尔值），供报告第七章区分展示——
+ * 特别声明「师资占用」维度：两子表即使没有公共班级，只要共用同一位师资，
+ * 其已排时段同样会被扣减（同一老师同一时段不能上两门课），避免被误读为班级占用。
  * @param {Object} course 来源课程记录（{teacher, classType, date, ...}，来自 scheduledBySheet）
  * @param {Object} courseItem 当前子表第一门实际排课课程（快照对应的师资/班级）
  * @param {Object|null} tailReserve 当前子表尾段预留配置（{dates, otherClasses}）
- * @returns {boolean}
+ * @returns {string[]|null} 参与扣除的维度标识数组（'teacher'/'class'/'tailReserve' 之一或组合，
+ *                           报告第七章以 EXCL_DIM_LABEL 转为中文）；未参与扣除返回 null
  */
-function isRelevantExcludedCourse(course, courseItem, tailReserve) {
-  // ① 同师资：该师资本人已排课程（师资维度扣除）
-  if (course.teacher === courseItem.teacher) return true;
-  // ② 同班级：组成班级有交集（班级维度扣除）
+function isRelevantExcludedCourse(course, courseItem, tailReserve, headReserve = null) {
+  const dims = [];
+  // ① 同师资：该师资本人已排课程（师资维度扣除，不限班级）
+  if (course.teacher === courseItem.teacher) dims.push('teacher');
+  // ② 同班级：组成班级有交集（班级维度扣除，不限师资）
   const courseClasses = splitClassTypes(course.classType);
   const thisClasses = splitClassTypes(courseItem.classType);
-  if (courseClasses.some(cl => thisClasses.includes(cl))) return true;
+  if (courseClasses.some(cl => thisClasses.includes(cl))) dims.push('class');
   // ③ 尾段预留：合班课「其他班级」在尾段日期内的已排课程
   if (tailReserve && Array.isArray(tailReserve.otherClasses)) {
     if (courseClasses.some(cl => tailReserve.otherClasses.includes(cl))) {
-      if (Array.isArray(tailReserve.dates) && tailReserve.dates.includes(String(course.date))) return true;
+      if (Array.isArray(tailReserve.dates) && tailReserve.dates.includes(String(course.date))) dims.push('tailReserve');
     }
   }
-  return false;
+  // ④ 头段预留（v5.83）：合班课「其他班级」在头段日期内的已排课程（镜像 ③ 尾段预留）
+  if (headReserve && Array.isArray(headReserve.otherClasses)) {
+    if (courseClasses.some(cl => headReserve.otherClasses.includes(cl))) {
+      if (Array.isArray(headReserve.dates) && headReserve.dates.includes(String(course.date))) dims.push('headReserve');
+    }
+  }
+  return dims.length > 0 ? dims : null;
 }
 
 /**
@@ -880,23 +1141,30 @@ function isRelevantExcludedCourse(course, courseItem, tailReserve) {
  *                                  见 generateSchedule 子表循环；格式 { dates, otherClasses }）
  * @param {Object|null} cutAfter 合班课之后截断配置（v5.59，本子表含有已排日期合班课时传入，
  *                               切割时刻为该合班课开始时间 − AVAIL_REMOVE_PAD；见 generateSchedule 子表循环）
- * @param {string|null} mergeRelaxFrom 跨子表推进日期（v5.72，合班课第一阶段 prevDate 中的
- *                                     lastMergeDateByTeacher 分量；第一阶段失败时逐天前移重试）
- * @param {string|null} mergeRelaxFloor 子表内链下界（v5.72，即 sheetPrevDate——降级不得越过，
- *                                      保住子表内行序递增）
+ * @param {string|null} earliestDate 日期下界（v5.83，先合后分侧：位于已定日期合班课之后的普通课，
+ *                                   限定在该合班课日期后一天之后排课；镜像 latestDate）
+ * @param {Object|null} headReserve 头段预留配置（v5.83，首次排先合后分子表时传入，
+ *                                  镜像 tailReserve；格式 { dates, otherClasses }）
+ * @param {Object|null} cutBefore 合班课之前截断配置（v5.83，本子表含有已排日期合班课时传入，
+ *                                切割时刻为该子表行序最后一个合班课结束时间 + AVAIL_REMOVE_PAD；
+ *                                镜像 cutAfter）
  * @returns {{date, startTime, endTime} | null}
  */
-function scheduleCourse(ctx, courseItem, monthAvailability, prevDate, latestDate = null, earliestFirst = false, reserveAfter = 1, trace = null, preferredSlot = null, tailReserve = null, cutAfter = null, mergeRelaxFrom = null, mergeRelaxFloor = null) {
+function scheduleCourse(ctx, courseItem, monthAvailability, prevDate, latestDate = null, earliestFirst = false, reserveAfter = 1, trace = null, preferredSlot = null, tailReserve = null, cutAfter = null, earliestDate = null, headReserve = null, cutBefore = null) {
   const teacher = courseItem.teacher;
   const classType = courseItem.classType;
   const durationMinutes = durationToMinutes(courseItem.duration);
 
   // 构建师资-班级空闲时间表（= 师资空闲 - 已排课占用的师资时间 - 已排课占用的班级时间，v5.39；
   // v5.49：首次排合班课子表时额外扣除该月尾段日期中合班课其他班级已排时间；
-  // v5.59：本子表含有已排日期合班课时，截断该合班课开始时间 − AVAIL_REMOVE_PAD 之后的所有碎片）
+  // v5.59：本子表含有已排日期合班课时，截断该合班课开始时间 − AVAIL_REMOVE_PAD 之后的所有碎片；
+  // v5.83：先合后分侧镜像 —— 扣头段日期中其他班级已排时间（headReserve）、截断最后一个合班课
+  //   结束时间 + AVAIL_REMOVE_PAD 之前的所有碎片（cutBefore，与截断链式叠加））
   const teacherClassAvailability = buildTeacherClassAvailability(monthAvailability, teacher, classType, ctx, {
     ...(tailReserve ? { tailReserve } : {}),
-    ...(cutAfter ? { cutAfter } : {})
+    ...(cutAfter ? { cutAfter } : {}),
+    ...(headReserve ? { headReserve } : {}),
+    ...(cutBefore ? { cutBefore } : {})
   });
   // 排课轨迹：保留「排课时刻的师资-班级空闲时间表」快照（供生成排课报告）
   if (trace) trace.availability = teacherClassAvailability.map(a => ({ ...a }));
@@ -925,37 +1193,15 @@ function scheduleCourse(ctx, courseItem, monthAvailability, prevDate, latestDate
   // 且 useEveningOnly 从未被读取，「仅晚上」语义实际由 timePriority.js 时间分数权重承载）
   // v5.34.2：reserveAfter 作为「日期预算硬约束」下传给 tryScheduleCourse——
   // 候选日期之后可用日期数不足（排不完本课及后续同师资课程）时禁选该日期。
-  const slot = tryScheduleCourse(teacherCtx, courseItem, teacher, feasibleDates, MIN_GAP, prevDate, allTeacherDates, preferredSlot, latestDate, earliestFirst, reserveAfter);
+  const slot = tryScheduleCourse(teacherCtx, courseItem, teacher, feasibleDates, MIN_GAP, prevDate, allTeacherDates, preferredSlot, latestDate, earliestFirst, reserveAfter, earliestDate);
   if (slot) {
     if (trace) trace.phase = 'normal';
     return slot;
   }
 
-  // v5.72 合班课跨子表推进「逐天放松」降级：第一阶段（含跨子表推进硬下界）失败时，
-  // 将该硬下界中 lastMergeDateByTeacher 的分量逐天前移重试，直至子表内链下界（不过越）。
-  // 背景：跨子表推进保证「后子表合班课不早于前子表同师资合班课」的内容顺序，但会把合班课
-  // 硬锁在月末；当月末物理可用日期不足（如李旭 10-28/10-31 无可排时间）而 reserveAfter
-  // 又要求留足后续日期时，形成确定性死锁（v5.72 报告 9 门失败的主要来源）。
-  // 逐天放松能保持顺序破坏最小：优先落在跨子表推进日期的前一天（内容上最接近），
-  // 而不是直接去掉推进后按锚点贪心导致写作课早于阅读课穿插（NO_MERGE_ADVANCE 实验现象）。
-  if (earliestFirst && mergeRelaxFrom) {
-    let relaxDate = dayBefore(mergeRelaxFrom);
-    let relaxAttempts = 0;
-    while (relaxDate && relaxAttempts < 31) {
-      relaxAttempts++;
-      if (mergeRelaxFloor && relaxDate < mergeRelaxFloor) break;
-      const relaxedSlot = tryScheduleCourse(teacherCtx, courseItem, teacher, feasibleDates, MIN_GAP, relaxDate, allTeacherDates, preferredSlot, latestDate, earliestFirst, reserveAfter);
-      if (relaxedSlot) {
-        if (trace) trace.phase = 'relaxed';
-        return relaxedSlot;
-      }
-      relaxDate = dayBefore(relaxDate);
-    }
-  }
-
   // 第二阶段：补排（使用原始空闲时间，hasConflict 兜底检测冲突）
   const allDates = [...new Set(monthAvailability.filter(a => a.teacher === teacher).map(a => a.date))].sort();
-  const makeupSlot = tryScheduleCourse(ctx, courseItem, teacher, allDates, MIN_GAP, prevDate, [], preferredSlot, latestDate, earliestFirst, reserveAfter);
+  const makeupSlot = tryScheduleCourse(ctx, courseItem, teacher, allDates, MIN_GAP, prevDate, [], preferredSlot, latestDate, earliestFirst, reserveAfter, earliestDate);
   if (makeupSlot) {
     if (trace) trace.phase = 'makeup';
     return makeupSlot;

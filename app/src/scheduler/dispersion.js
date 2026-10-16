@@ -446,7 +446,7 @@ function simulateHeuristicDates(courses, pools, unionDates, allMonthDates) {
  *        greedy-heuristic（贪心+启发式：每步选一天，启发式估计剩余课潜在分散分，v5.56）
  * @returns {{slots: Array, dates: string[]}|null} 任一课程无可行槽则整体不可行 → null
  */
-export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, strategy, rangeStart, rangeEnd, baseCtx, tailReserve, cutAfter, fixedMergeSlots = null) {
+export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, strategy, rangeStart, rangeEnd, baseCtx, tailReserve, cutAfter, fixedMergeSlots = null, headReserve = null, cutBefore = null) {
   const N = courses.length;
   if (N === 0) return null;
   const meta = STRATEGY_META[strategy] || STRATEGY_META['evening-spread'];
@@ -467,7 +467,7 @@ export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, 
     if (fx) return [fx.date]; // 已定日期合班课：仅固定日期可排
     const cStart = c.startDate || rangeStart;
     const cEnd = c.endDate || rangeEnd;
-    const frags = buildTeacherClassAvailability(monthAvailability, c.teacher, c.classType, baselineCtx, { ...(tailReserve ? { tailReserve } : {}), ...(((cutAfter && !isMergeCourse(c)) ? { cutAfter } : {})) })
+    const frags = buildTeacherClassAvailability(monthAvailability, c.teacher, c.classType, baselineCtx, { ...(tailReserve ? { tailReserve } : {}), ...(((cutAfter && !isMergeCourse(c)) ? { cutAfter } : {})), ...(headReserve ? { headReserve } : {}), ...(((cutBefore && !isMergeCourse(c)) ? { cutBefore } : {})) })
       .filter(f => dateInRange(f.date, cStart, cEnd));
     return [...new Set(frags.map(f => f.date))].sort();
   });
@@ -668,7 +668,7 @@ export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, 
   };
 
   const placeOn = (course, date, courseIndex) => {
-    const frags = buildTeacherClassAvailability(monthAvailability, course.teacher, course.classType, simCtx, { ...(tailReserve ? { tailReserve } : {}), ...(((cutAfter && !isMergeCourse(course)) ? { cutAfter } : {})) })
+    const frags = buildTeacherClassAvailability(monthAvailability, course.teacher, course.classType, simCtx, { ...(tailReserve ? { tailReserve } : {}), ...(((cutAfter && !isMergeCourse(course)) ? { cutAfter } : {})), ...(headReserve ? { headReserve } : {}), ...(((cutBefore && !isMergeCourse(course)) ? { cutBefore } : {})) })
       .filter(f => f.date === date);
     return pickSlot(enumerateFeasibleSlots(frags, course, simCtx), courseIndex);
   };
@@ -755,7 +755,7 @@ export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, 
       const dayStr = shiftDay(cur.date, delta);
       if (!pools[i].includes(dayStr)) continue;
       const frags = buildTeacherClassAvailability(monthAvailability, course.teacher, course.classType, simCtx,
-        { ...(tailReserve ? { tailReserve } : {}), ...(((cutAfter && !isMergeCourse(course)) ? { cutAfter } : {})) })
+        { ...(tailReserve ? { tailReserve } : {}), ...(((cutAfter && !isMergeCourse(course)) ? { cutAfter } : {})), ...(headReserve ? { headReserve } : {}), ...(((cutBefore && !isMergeCourse(course)) ? { cutBefore } : {})) })
         .filter(f => f.date === dayStr);
       const slotList = enumerateFeasibleSlots(frags, course, simCtx);
       const best = pickSlot(slotList, i); // 该日按本策略语义的最优槽
@@ -875,7 +875,7 @@ export function scoreSimulatedPlan(plan, allMonthDates) {
  *         candidates = 全部候选方案（含策略名/评分/各维度明细 detail/槽位序列，按评分降序），
  *         供排课报告展示「各分散策略详情与评分 + 模拟日历表」（v5.51.1）
  */
-export function findBestDispersionPlan(availableDates, totalCourses, teacher, monthAvailability, allMonthDates, rangeStart = null, rangeEnd = null, courses = null, baseCtx = null, tailReserve = null, cutAfter = null, fixedMergeSlots = null) {
+export function findBestDispersionPlan(availableDates, totalCourses, teacher, monthAvailability, allMonthDates, rangeStart = null, rangeEnd = null, courses = null, baseCtx = null, tailReserve = null, cutAfter = null, fixedMergeSlots = null, headReserve = null, cutBefore = null) {
   const courseArr = courses && courses.length > 0
     ? courses
     : buildSyntheticCourses(totalCourses, teacher, availableDates, rangeStart, rangeEnd);
@@ -907,7 +907,7 @@ export function findBestDispersionPlan(availableDates, totalCourses, teacher, mo
   for (const strategy of strategies) {
     try {
       // 只对自由课模拟（freeIndexes 存在时一律传 null 的 fixedMergeSlots，避免索引错位）
-      const rawFree = simulateScheduleOnce(freeCourses, monthAvailability, allMonthDates, strategy, rangeStart, rangeEnd, baseCtx, tailReserve, cutAfter, freeIndexes ? null : fixedMergeSlots);
+      const rawFree = simulateScheduleOnce(freeCourses, monthAvailability, allMonthDates, strategy, rangeStart, rangeEnd, baseCtx, tailReserve, cutAfter, freeIndexes ? null : fixedMergeSlots, headReserve, cutBefore);
       if (!rawFree) {
         if (!!process.env.SCHEDULE_DEBUG) console.log(`    [模拟排课] 策略 ${strategy} 不可行（两阶段模拟：日期层无解或槽位层放不下）`);
         continue;
