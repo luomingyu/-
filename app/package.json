@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "serve": "node ../server/index.mjs",
+    "sync": "npm run build && node scripts/regen-backend-schedule.mjs"
   },
   "dependencies": {
+    "html2canvas": "^1.4.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

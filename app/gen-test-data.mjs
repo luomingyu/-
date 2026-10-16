@@ -74,21 +74,33 @@ for (const t of teachers) {
 }
 
 // ===== 生成课程体系表（5 个 sheet，每师资一个）=====
+// 每 sheet 带起始/终止日期，课程仅在该区间内排课
+const courseRanges = {
+  '高数': ['2026-09-01', '2026-09-15'],
+  '英语': ['2026-09-06', '2026-09-22'],
+  '物理': ['2026-09-01', '2026-09-30'],
+  '化学': ['2026-09-08', '2026-09-26'],
+  '线代': ['2026-09-10', '2026-09-30'],
+};
+
 const courseWb = XLSX.utils.book_new();
 let totalCourses = 0;
 for (const t of teachers) {
-  const aoa = [['班型', '课程名称', '师资名称', '时长']];
+  // 起始/终止日期以 Excel 序列号写入
+  const [startDate, endDate] = courseRanges[t.subject] || [];
+  const aoa = [['班型', '课程名称', '师资名称', '时长', '起始日期', '终止日期']];
   for (let i = 1; i <= t.courses; i++) {
-    aoa.push(['28OMO', `${t.subject}-第${i}讲`, t.name, t.duration]);
+    aoa.push(['28OMO', `${t.subject}-第${i}讲`, t.name, t.duration,
+      startDate ? dateToSerial(startDate) : '', endDate ? dateToSerial(endDate) : '']);
     totalCourses++;
   }
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 10 }, { wch: 28 }, { wch: 10 }, { wch: 8 }];
+  ws['!cols'] = [{ wch: 10 }, { wch: 28 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 12 }];
   XLSX.utils.book_append_sheet(courseWb, ws, t.subject);
 }
 const coursePath = join(outDir, '课程体系表-5师资.xlsx');
 XLSX.writeFile(courseWb, coursePath);
 console.log(`\n已生成: ${coursePath} (${totalCourses} 门课, 5 个 sheet)`);
 for (const t of teachers) {
-  console.log(`  ${t.name}(${t.subject}): ${t.courses}课 × ${t.duration}min`);
+  console.log(`  ${t.name}(${t.subject}): ${t.courses}课 × ${t.duration}min, 区间 ${courseRanges[t.subject]?.join(' ~ ') || '不限'}`);
 }

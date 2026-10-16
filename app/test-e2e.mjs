@@ -5,6 +5,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { generateSchedule } from './src/scheduler/index.js';
 import { timeToMinutes, durationToMinutes, formatExcelDate, formatExcelTime } from './src/utils/dateUtils.js';
+import { splitClassTypes, hasMultipleClasses } from './src/utils/classType.js';
 import { CLASS_MIN_GAP } from './src/scheduler/constants.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -59,21 +60,31 @@ function parseCourseSystem(workbook) {
     const nIdx = findIdx(['课程名称', '课程名', '课程']);
     const tIdx = findIdx(['师资', '老师', '姓名', '教师']);
     const dIdx = findIdx(['时长', '课时', '时间']);
+    const sIdx = findIdx(['起始日期', '开始日期', '起始']);
+    const eIdx = findIdx(['终止日期', '结束日期', '终止']);
     if (cIdx === -1 || nIdx === -1 || tIdx === -1 || dIdx === -1) continue;
 
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       if (!row[cIdx]) continue;
-      const classType = String(row[cIdx] || '').trim();
       const courseName = String(row[nIdx] || '').trim();
       const teacher = String(row[tIdx] || '').trim();
       const duration = String(row[dIdx] || '').trim();
-      if (classType && courseName && teacher && duration) {
-        list.push({
-          classType, courseName, teacher, duration,
-          scheduled: null, sheetIndex: sheetIdx, sheetName, orderInSheet: i - 1
-        });
-      }
+      // 起始/终止日期（可选列，与前端 excelParser.js 保持一致）
+      const startDate = sIdx !== -1 && row[sIdx] != null && row[sIdx] !== '' ? formatExcelDate(row[sIdx]) : '';
+      const endDate = eIdx !== -1 && row[eIdx] != null && row[eIdx] !== '' ? formatExcelDate(row[eIdx]) : '';
+      // 班级名称栏支持合班上课（v5.27）：中英文逗号隔开的多个班级保留为一条课程记录，
+      // 排课时同时满足所有班级空闲、结果显示复合班型（与前端 excelParser.js 一致）
+      const classType = String(row[cIdx] || '')
+        .split(/[,，]/)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .join(',');
+      if (!courseName || !teacher || !duration || !classType) continue;
+      list.push({
+        classType, courseName, teacher, duration, startDate, endDate,
+        scheduled: null, sheetIndex: sheetIdx, sheetName, orderInSheet: i - 1
+      });
     }
   }
   return list;
@@ -89,22 +100,24 @@ function parseCourseSystem(workbook) {
 function checkHardConstraints(courses, availabilityData) {
   const errors = [];
 
-  // 1. 师资+班级+日期 唯一性
+  // 1. 师资+班级+日期 唯一性（合班课按单班展开：任一班级同师同日不可重复排）
   const teacherClassDateMap = {};
   for (const c of courses) {
-    const teacher = c.teacher.replace('老师', '');
-    const key = `${teacher}|${c.classType}|${c.date}`;
-    if (teacherClassDateMap[key]) {
-      errors.push(`[硬约束1违反] 同师同班同天排多节: ${key} 有 ${teacherClassDateMap[key].name} 和 ${c.name}`);
-    } else {
-      teacherClassDateMap[key] = c;
+    const teacher = c.teacher;
+    for (const eachClass of splitClassTypes(c.classType)) {
+      const key = `${teacher}|${eachClass}|${c.date}`;
+      if (teacherClassDateMap[key]) {
+        errors.push(`[硬约束1违反] 同师同班同天排多节: ${key} 有 ${teacherClassDateMap[key].name} 和 ${c.name}`);
+      } else {
+        teacherClassDateMap[key] = c;
+      }
     }
   }
 
   // 2. 师资时间不重叠（同一天同一师资的课程）
   const teacherDateMap = {};
   for (const c of courses) {
-    const teacher = c.teacher.replace('老师', '');
+    const teacher = c.teacher;
     const key = `${teacher}|${c.date}`;
     if (!teacherDateMap[key]) teacherDateMap[key] = [];
     teacherDateMap[key].push(c);
@@ -125,12 +138,14 @@ function checkHardConstraints(courses, availabilityData) {
     }
   }
 
-  // 3. 班级时间不重叠（同一天同一班级的课程）
+  // 3. 班级时间不重叠（同一天同一班级的课程；合班课按单班展开检查班级占用）
   const classDateMap = {};
   for (const c of courses) {
-    const key = `${c.classType}|${c.date}`;
-    if (!classDateMap[key]) classDateMap[key] = [];
-    classDateMap[key].push(c);
+    for (const eachClass of splitClassTypes(c.classType)) {
+      const key = `${eachClass}|${c.date}`;
+      if (!classDateMap[key]) classDateMap[key] = [];
+      classDateMap[key].push(c);
+    }
   }
 
   for (const [key, list] of Object.entries(classDateMap)) {
@@ -149,7 +164,7 @@ function checkHardConstraints(courses, availabilityData) {
 
   // 4. 课程时间必须在师资空闲时间内
   for (const c of courses) {
-    const teacher = c.teacher.replace('老师', '');
+    const teacher = c.teacher;
     const cStart = timeToMinutes(c.startTime);
     const cEnd = timeToMinutes(c.endTime);
     const avails = availabilityData.filter(a => a.teacher === teacher && a.date === c.date);
@@ -189,7 +204,7 @@ function checkSoftConstraints(courses, courseSystemData) {
     // 检查日期递增（同师资同班级维度）
     const byTeacherClass = {};
     for (const c of sorted) {
-      const teacher = c.teacher.replace('老师', '');
+      const teacher = c.teacher;
       const key = `${teacher}|${c.classType}`;
       if (!byTeacherClass[key]) byTeacherClass[key] = [];
       byTeacherClass[key].push(c);
@@ -259,6 +274,36 @@ const currentDate = new Date(ey, em - 1, 1);
 
 console.log(`\n排课基准日期: ${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}\n`);
 
+// === 合班上课验证数据注入（v5.27）===
+// 注入两门合班课：班型栏含两个班级（逗号隔开），验证排课按"合并上课"处理：
+// 同时满足两个班级空闲、只排一节、结果显示复合班型
+// v5.34 起合班课须与「所在子表课程体系顺序」一起排课：
+// - 窦峥合班课归入真实子表 Sheet5（其内已有窦峥真实合班课 order=8/9/10），
+//   orderInSheet=7.5 置于真实合班课之前，与该子表课程一起按行序排课；
+//   若仍放入独立子表，其跨子表递增约束需晚于该师资最近合班课（09-30），9 月内将无日期可排
+// - 王喆合班课置于独立子表「合班验证」底部（该师资无其他合班课，任何子表均可正常排入）
+const mergedInjections = [
+  { classType: '27OMO,28OMO', courseName: '合班验证-高数综合（27OMO+28OMO）', teacher: '窦峥', duration: '150',
+    sheetIndex: 2, sheetName: 'Sheet5', orderInSheet: 7.5 },
+  { classType: '27考研数学（一）早鸟腾飞班,28考研数学（一）早鸟腾飞班', courseName: '合班验证-数学基础衔接（27早鸟+28早鸟）', teacher: '王喆', duration: '90',
+    sheetIndex: 999, sheetName: '合班验证', orderInSheet: 9000 }
+];
+mergedInjections.forEach(m => {
+  courseSystemData.push({
+    classType: m.classType,
+    courseName: m.courseName,
+    teacher: m.teacher,
+    duration: m.duration,
+    startDate: '',
+    endDate: '',
+    scheduled: null,
+    sheetIndex: m.sheetIndex,
+    sheetName: m.sheetName,
+    orderInSheet: m.orderInSheet
+  });
+});
+console.log(`已注入 ${mergedInjections.length} 门合班课（合并上课），当前课程体系表共 ${courseSystemData.length} 门\n`);
+
 console.log('--- 课程体系表顺序 ---');
 courseSystemData.forEach((c, i) => {
   console.log(`  ${i + 1}. [${c.sheetName}][${c.classType}] ${c.courseName} - ${c.teacher} (${c.duration}分钟)`);
@@ -300,6 +345,32 @@ if (errors.length === 0) {
   errors.forEach(e => console.log(`  ${e}`));
 }
 
+console.log('\n=== 合班课验证（v5.27 合并上课）===');
+const mergedCourses = courseSystemData.filter(c => hasMultipleClasses(c.classType));
+const mergedResults = [];
+for (const mc of mergedCourses) {
+  const scheduled = result.courses.filter(c => c.name === mc.courseName);
+  const classes = splitClassTypes(mc.classType);
+  let ok = true;
+  if (scheduled.length === 0) {
+    ok = false;
+    console.log(`  ❌ ${mc.courseName} [${mc.classType}] 未排入`);
+  } else if (scheduled.length !== 1) {
+    ok = false;
+    console.log(`  ❌ ${mc.courseName} [${mc.classType}] 被拆成 ${scheduled.length} 节课（合班课应只排 1 节）`);
+  } else {
+    const s = scheduled[0];
+    console.log(`  ✅ ${mc.courseName} [${s.classType}] → ${s.date} ${s.startTime}-${s.endTime} (${s.teacher}) 仅 1 节，结果显示 ${s.classType.split(/[,，]/).length} 个班级`);
+  }
+  // 单班筛选命中：任一组成班级筛选都能看到该合班课
+  for (const cls of classes) {
+    const hit = result.courses.some(c => c.name === mc.courseName && splitClassTypes(c.classType).includes(cls));
+    if (!hit) ok = false;
+    console.log(`    班级筛选「${cls}」${hit ? '✅ 命中该合班课' : '❌ 未命中'}`);
+  }
+  mergedResults.push({ courseName: mc.courseName, classType: mc.classType, ok });
+}
+
 console.log('\n=== 软约束检查（课程体系顺序 + 日期递增）===');
 const warnings = checkSoftConstraints(result.courses, courseSystemData);
 if (warnings.length === 0) {
@@ -313,7 +384,7 @@ if (warnings.length === 0) {
 console.log('\n=== 分散度质量分析（按 师资+班级 维度）===');
 const dispersionGroups = {};
 for (const c of result.courses) {
-  const teacher = c.teacher.replace('老师', '');
+  const teacher = c.teacher;
   const key = `${teacher}|${c.classType}`;
   if (!dispersionGroups[key]) dispersionGroups[key] = [];
   dispersionGroups[key].push(c);
@@ -335,8 +406,12 @@ for (const [key, list] of Object.entries(dispersionGroups)) {
   const range = days.length ? days[days.length - 1] - days[0] : 0;
   // 相邻天(gap=1)计数
   const adjacentCount = gaps.filter(g => g <= 1).length;
-  // 大间隔(>7天)计数
-  const largeGapCount = gaps.filter(g => g > 7).length;
+  // 大间隔计数：阈值随课程节奏缩放（与 dispersion.js v5.16 的评分规则一致）
+  // 节奏 = 覆盖天数 / (课程数-1)；阈值 = max(7, 节奏×1.5)
+  // 少课课程允许均匀覆盖全月（如 2 课间隔 29 天），多课课程仍要求不超一周空白
+  const rhythm = gaps.length > 0 ? range / gaps.length : 0;
+  const largeGapThreshold = Math.max(7, rhythm * 1.5);
+  const largeGapCount = gaps.filter(g => g > largeGapThreshold).length;
 
   // 计算该师资可用日期的「最大隔天容量」(gap≥2 独立集)，判断相邻天是否数据强制
   const teacher = key.split('|')[0];
@@ -362,7 +437,7 @@ for (const [key, list] of Object.entries(dispersionGroups)) {
       issues.push(`相邻天×${adjacentCount}(可优化)`);
     }
   }
-  if (largeGapCount > 0) { status = '⚠️'; issues.push(`大间隔(>7天)×${largeGapCount}`); }
+  if (largeGapCount > 0) { status = '⚠️'; issues.push(`大间隔(>${Math.round(largeGapThreshold)}天, 节奏${rhythm.toFixed(1)}天)×${largeGapCount}`); }
   if (stdDev > 2) { status = '⚠️'; issues.push(`间隔不均(σ=${stdDev.toFixed(1)})`); }
 
   console.log(`  ${status} ${key} (${list.length}课): 日期 ${days.map(d=>String(d).padStart(2,'0')).join(',')}
@@ -392,10 +467,12 @@ if (timeBuckets.other > 0) console.log(`  其他: ${timeBuckets.other}课`);
 
 // 排课完成率
 const rate = ((result.successCount / courseSystemData.length) * 100).toFixed(1);
+const mergedOk = mergedResults.length === 0 || mergedResults.every(r => r.ok);
 console.log(`\n=== 测试结论 ===`);
 console.log(`排课完成率: ${result.successCount}/${courseSystemData.length} (${rate}%)`);
 console.log(`硬约束: ${errors.length === 0 ? '✅ 通过' : '❌ 违反 ' + errors.length + ' 项'}`);
 console.log(`软约束: ${warnings.length === 0 ? '✅ 通过' : '⚠️ 警告 ' + warnings.length + ' 项'}`);
 console.log(`分散度: ${dispersionIssues.length === 0 ? '✅ 良好' : '⚠️ ' + dispersionIssues.length + ' 组需优化'}`);
+console.log(`合班课(合并上课): ${mergedOk ? '✅ 通过' : '❌ 存在失败项'}`);
 
 console.log('\n=== 测试完成 ===');

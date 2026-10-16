@@ -56,6 +56,8 @@ function parseCourseSystem(workbook) {
     const nIdx = findIdx(['课程名称', '课程名', '课程']);
     const tIdx = findIdx(['师资', '老师', '姓名', '教师']);
     const dIdx = findIdx(['时长', '课时', '时间']);
+    const sIdx = findIdx(['起始日期', '开始日期', '起始']);
+    const eIdx = findIdx(['终止日期', '结束日期', '终止']);
     if (cIdx === -1 || nIdx === -1 || tIdx === -1 || dIdx === -1) continue;
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
@@ -65,8 +67,11 @@ function parseCourseSystem(workbook) {
       const teacher = String(row[tIdx] || '').trim();
       const duration = String(row[dIdx] || '').trim();
       if (classType && courseName && teacher && duration) {
+        const startDate = sIdx !== -1 && row[sIdx] != null && row[sIdx] !== '' ? formatExcelDate(row[sIdx]) : '';
+        const endDate = eIdx !== -1 && row[eIdx] != null && row[eIdx] !== '' ? formatExcelDate(row[eIdx]) : '';
         list.push({
           classType, courseName, teacher, duration,
+          startDate, endDate,
           scheduled: null, sheetIndex: sheetIdx, sheetName, orderInSheet: i - 1
         });
       }
