@@ -46,6 +46,9 @@
           <button class="image-export-btn" id="exportImageBtn" type="button" title="将当前日历课表生成 PNG 图片（按当前班级/师资筛选）">
             <span>🖼</span><span>生成图片</span>
           </button>
+          <button class="image-export-btn" id="exportFeishuBtn" type="button" title="将当前日历课表生成飞书在线表格（按当前班级/师资筛选）">
+            <span>📊</span><span>生成飞书表格</span>
+          </button>
         </div>
       </div>
     </header>
@@ -95,7 +98,7 @@
                   <button class="upload-btn" type="button">
                     <span>📁</span><span>上传</span>
                   </button>
-                  <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
+                  <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple />
                 </div>
                 <a class="example-download" href="示例文件/空闲时间表.xlsx" download="空闲时间表.xlsx" title="下载示例表（师资名称 · 日期 · 开始时间 · 结束时间）">
                   <span>📄</span><span>示例表</span>
@@ -130,7 +133,7 @@
                   <button class="upload-btn" type="button">
                     <span>📁</span><span>上传</span>
                   </button>
-                  <input type="file" id="courseSystemFileInput" accept=".xlsx,.xls,.csv" />
+                  <input type="file" id="courseSystemFileInput" accept=".xlsx,.xls,.csv" multiple />
                 </div>
                 <a class="example-download" href="示例文件/课程体系表.xlsx" download="课程体系表.xlsx" title="下载示例表（班型 · 课程名称 · 师资名称 · 时长(分钟) · 起始日期 · 终止日期）">
                   <span>📄</span><span>示例表</span>
@@ -162,7 +165,7 @@
                   <button class="upload-btn" type="button">
                     <span>📁</span><span>上传</span>
                   </button>
-                  <input type="file" id="presetFileInput" accept=".xlsx,.xls,.csv" />
+                  <input type="file" id="presetFileInput" accept=".xlsx,.xls,.csv" multiple />
                 </div>
                 <a class="example-download" href="示例文件/已排课表.xlsx" download="已排课表.xlsx" title="下载示例表（班级 · 课节名称 · 师资 · 授课日期 · 授课时间）">
                   <span>📄</span><span>示例表</span>

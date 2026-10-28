@@ -120,6 +120,11 @@
   border-color: var(--primary);
 }
 
+.image-export-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 /* 顶部条标题组：标题 + 使用说明链接 */
 .top-bar__title-group {
   display: flex;

@@ -2,6 +2,7 @@
 import { timeToMinutes, minutesToTime } from '../utils/dateUtils.js';
 import { splitClassTypes } from '../utils/classType.js';
 import { CLASS_MIN_GAP, AVAIL_REMOVE_PAD, AVAIL_REMOVE_PAD_TEACHER } from './constants.js';
+import { getSubjectOfTeacher, isSubjectConflict, isAvailabilityClassConflict } from '../config/constants.js';
 
 /**
  * 创建排课上下文
@@ -11,7 +12,7 @@ export function createScheduleContext(monthAvailability) {
   return {
     monthAvailability,
     teacherScheduleByDate: {}, // [teacher][date] = [{startTime, endTime}]
-    classScheduleByDate: {},   // [classType][date] = [{startTime, endTime}]
+    classScheduleByDate: {},   // [classType][date] = [{startTime, endTime, subject}]
     // 硬约束：每天只能排某个师资某个班级一节课
     // [teacher][classType][date] = count
     teacherClassScheduleByDate: {},
@@ -20,17 +21,53 @@ export function createScheduleContext(monthAvailability) {
   };
 }
 
+/**
+ * 深拷贝排课上下文（含占用账本），用于「先校验、后落账」的重放验证。
+ * @param {Object} ctx 源上下文
+ * @param {Array|null} monthAvailability 替换用的师资空闲表（null 时沿用源上下文）
+ */
+export function cloneContext(ctx, monthAvailability = null) {
+  const cloneDeep = (v) => (v == null ? v : JSON.parse(JSON.stringify(v)));
+  return {
+    monthAvailability: monthAvailability || ctx.monthAvailability,
+    teacherScheduleByDate: cloneDeep(ctx.teacherScheduleByDate) || {},
+    classScheduleByDate: cloneDeep(ctx.classScheduleByDate) || {},
+    teacherClassScheduleByDate: cloneDeep(ctx.teacherClassScheduleByDate) || {},
+    scheduledCourses: cloneDeep(ctx.scheduledCourses) || [],
+    dayCourseCounts: cloneDeep(ctx.dayCourseCounts) || {}
+  };
+}
+
+/**
+ * 判断某个槽位是否完整落在师资原始空闲表内（用于模拟方案落账前的校验）。
+ * @returns {boolean}
+ */
+export function slotWithinAvailability(monthAvailability, { teacher, date, startTime, endTime }) {
+  const s = timeToMinutes(startTime);
+  const e = timeToMinutes(endTime);
+  if (!(e > s)) return false;
+  return (monthAvailability || []).some((a) =>
+    a.teacher === teacher &&
+    a.date === date &&
+    timeToMinutes(a.startTime) <= s &&
+    e <= timeToMinutes(a.endTime)
+  );
+}
+
 /** 将成功排课的时间槽注册到上下文 */
 export function registerSlot(ctx, { teacher, classType, date, startTime, endTime }) {
   if (!ctx.teacherScheduleByDate[teacher]) ctx.teacherScheduleByDate[teacher] = {};
   if (!ctx.teacherScheduleByDate[teacher][date]) ctx.teacherScheduleByDate[teacher][date] = [];
   ctx.teacherScheduleByDate[teacher][date].push({ startTime, endTime });
 
+  // v5.95：班级占用槽记录科目，用于「科目部分互斥」判定（日语仅与政治/数学互斥）
+  const subject = getSubjectOfTeacher(teacher);
+
   // 合班课（v5.27）：对每个班级分别注册班级日程与"师资+班级+日期"硬约束计数
   for (const eachClass of splitClassTypes(classType)) {
     if (!ctx.classScheduleByDate[eachClass]) ctx.classScheduleByDate[eachClass] = {};
     if (!ctx.classScheduleByDate[eachClass][date]) ctx.classScheduleByDate[eachClass][date] = [];
-    ctx.classScheduleByDate[eachClass][date].push({ startTime, endTime });
+    ctx.classScheduleByDate[eachClass][date].push({ startTime, endTime, subject });
 
     if (!ctx.teacherClassScheduleByDate[teacher]) ctx.teacherClassScheduleByDate[teacher] = {};
     if (!ctx.teacherClassScheduleByDate[teacher][eachClass]) ctx.teacherClassScheduleByDate[teacher][eachClass] = {};
@@ -53,11 +90,14 @@ export function registerSlot(ctx, { teacher, classType, date, startTime, endTime
  * 「每天至多一节」师资维度硬约束——同班/同师同日不同时段仍可并存，
  * 仅按时间窗（含 X / Y 缓冲）互斥。
  */
-export function registerPresetClassSlots(ctx, { classType, teacher, date, startTime, endTime }) {
+export function registerPresetClassSlots(ctx, { classType, teacher, date, startTime, endTime, subject = null }) {
   for (const eachClass of splitClassTypes(classType)) {
     if (!ctx.classScheduleByDate[eachClass]) ctx.classScheduleByDate[eachClass] = {};
     if (!ctx.classScheduleByDate[eachClass][date]) ctx.classScheduleByDate[eachClass][date] = [];
-    ctx.classScheduleByDate[eachClass][date].push({ startTime, endTime });
+    // v5.95：已排课表无科目列，默认 subject 为 null（未识别科目）；
+    // v5.99：调用方通过 inferPresetSubject 推断科目后传入，使已排课表参与
+    //   「科目部分互斥」判定（如英语已排课不再阻挡日语）；识别不出时仍为 null → 全互斥
+    ctx.classScheduleByDate[eachClass][date].push({ startTime, endTime, subject, isPreset: true });
   }
   // 师资维度占用（师资列非空时）：扣除该师资自身已排时段（前后各留 Y 分钟缓冲）
   if (teacher) {
@@ -79,9 +119,10 @@ export function hasTeacherClassOnDate(ctx, { teacher, classType, date }) {
 }
 
 /** 校验某时间槽是否与已有课程冲突（师资间隔 minGap + 班级间隔 CLASS_MIN_GAP + 师资班级每天一节） */
-export function hasConflict(ctx, { teacher, classType, date, slotStart, slotEnd, minGap }) {
+export function hasConflict(ctx, { teacher, classType, date, slotStart, slotEnd, minGap, allowSameDay = false }) {
   // 硬约束兜底：同一天同一师资（合班课的任一班级）只能排一节课
-  if (hasTeacherClassOnDate(ctx, { teacher, classType, date })) {
+  // allowSameDay=true（兜底放宽）：跳过该「整日封锁」，仅按下方师资间隔 minGap 与班级间隔判定
+  if (!allowSameDay && hasTeacherClassOnDate(ctx, { teacher, classType, date })) {
     return true;
   }
 
@@ -95,9 +136,15 @@ export function hasConflict(ctx, { teacher, classType, date, slotStart, slotEnd,
   }
 
   // 合班课（v5.27）：任一班级当天该时段已被课程占用即冲突
+  // v5.95：班级占用按「科目互斥矩阵」过滤——日语仅与政治/数学互斥，
+  //        与英语、408计算机可同班同时段并存；未知科目保守全互斥。
+  // v5.99：已排课表条目已通过 inferPresetSubject 识别科目，同样参与该矩阵；
+  //        识别不出科目的条目仍为 null → 保守全互斥。
+  const currentSubject = getSubjectOfTeacher(teacher);
   for (const eachClass of splitClassTypes(classType)) {
     const existingClassCourses = ctx.classScheduleByDate[eachClass]?.[date] || [];
     for (const e of existingClassCourses) {
+      if (!isSubjectConflict(currentSubject, e.subject)) continue;
       const eStart = timeToMinutes(e.startTime);
       const eEnd = timeToMinutes(e.endTime);
       if (!(slotEnd + CLASS_MIN_GAP <= eStart || slotStart - CLASS_MIN_GAP >= eEnd)) {
@@ -117,9 +164,10 @@ export function hasConflict(ctx, { teacher, classType, date, slotStart, slotEnd,
  * @param {Object} p { teacher, classType, date, durationMinutes }
  * @returns {boolean} true 表示该日至少还有一个可用时间槽
  */
-export function hasAnyFeasibleSlot(ctx, { teacher, classType, date, durationMinutes }) {
+export function hasAnyFeasibleSlot(ctx, { teacher, classType, date, durationMinutes, allowSameDay = false }) {
   // 硬约束：该师资该班级当天已排过课 → 不可再排
-  if (hasTeacherClassOnDate(ctx, { teacher, classType, date })) {
+  // allowSameDay=true（兜底放宽）：跳过整日封锁，仅按时间窗是否存在可放下的槽位判定
+  if (!allowSameDay && hasTeacherClassOnDate(ctx, { teacher, classType, date })) {
     return false;
   }
   const dateAvailabilities = ctx.monthAvailability.filter(
@@ -132,7 +180,7 @@ export function hasAnyFeasibleSlot(ctx, { teacher, classType, date, durationMinu
       const slotStart = availStart + offset;
       const slotEnd = slotStart + durationMinutes;
       if (slotEnd > availEnd) break;
-      if (!hasConflict(ctx, { teacher, classType, date, slotStart, slotEnd, minGap: 0 })) {
+      if (!hasConflict(ctx, { teacher, classType, date, slotStart, slotEnd, minGap: 0, allowSameDay })) {
         return true;
       }
     }
@@ -219,6 +267,11 @@ export function applyCutBefore(availability, cutBefore) {
  * 扣除维度：
  *   1. 班级已占用时段：班级课程时间表包含该班级所有已排课程（含其他师资），
  *      确保新排课程不与班级已有课程冲突，扣减时开头结尾各多减 AVAIL_REMOVE_PAD 分钟；
+ *      v5.96：按「空闲表扣除口径」过滤班级课程——日语师资仅扣除同班政治/数学课节，
+ *      同班英语、408计算机、日语（其他师资）均不扣除；其余科目沿用科目互斥矩阵
+ *      （当前为全科目扣除）；未知科目保守全扣。硬冲突仍由 isSubjectConflict 判定。
+ *      v5.99：已排课表（preset）识别科目后按硬互斥口径（isSubjectConflict）扣除，
+ *      与班级冲突检测完全一致；识别不出科目时保守全扣。
  *   2. 师资已占用时段：该师资自身已排课程（同一时刻师资只能上一门课，
  *      即使那门课是别的班级的也要扣除），扣减时开头结尾各多减 AVAIL_REMOVE_PAD_TEACHER（Y）分钟，
  *      确保新排课程与师资既有档期保持间隔（缺省 Y=30，如已排 17:00-19:00，实际按 16:30-19:30 扣除）。
@@ -319,11 +372,23 @@ export function buildTeacherClassAvailability(monthAvailability, teacher, classT
   }
 
   const result = [];
+  // v5.96：按空闲表扣除口径过滤班级占用
+  //   日语师资仅扣同班政治/数学；同班英语、408计算机、日语（其他师资）不扣除；其余科目沿用互斥矩阵
+  //   同师资自身课节不在此判断，由下方 teacherCourses 单独扣除
+  const currentSubject = getSubjectOfTeacher(teacher);
   for (const avail of teacherAvail) {
     const availStart = timeToMinutes(avail.startTime);
     const availEnd = timeToMinutes(avail.endTime);
 
-    const classCourses = classSchedule[avail.date] || [];
+    // v5.99：已排课表（isPreset）按「硬互斥口径」扣除（isSubjectConflict）——
+    //   preset 已通过 inferPresetSubject 识别科目：日语同班英语/408计算机的 preset 不扣除，
+    //   政治/数学/日语及未识别科目的 preset 照常扣除；这样空闲表与 hasConflict 完全一致，
+    //   不会再出现「空闲表显示可用、实际排课被拒」或相反的情况
+    const classCourses = (classSchedule[avail.date] || []).filter(
+      c => c.isPreset === true
+        ? isSubjectConflict(currentSubject, c.subject)
+        : isAvailabilityClassConflict(currentSubject, c.subject)
+    );
     // 该师资当天自身已排课程（v5.39：排除已排课的师资时间）
     const teacherCourses = ctx.teacherScheduleByDate?.[teacher]?.[avail.date] || [];
 

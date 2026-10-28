@@ -3,7 +3,7 @@
 //        逐门模拟排课（时段可放性 + 师资并发互斥/班级冲突硬约束），多种策略
 //        各产出一种完整可行的分散排课方案（{date, startTime, endTime} 槽位序列），
 //        评分（分散度评分）后选择分数最高者作为最终方案。
-import { registerSlot, createScheduleContext, buildTeacherClassAvailability, hasConflict } from './scheduleContext.js';
+import { registerSlot, createScheduleContext, buildTeacherClassAvailability, hasConflict, hasTeacherClassOnDate } from './scheduleContext.js';
 import { calculateTimePriorityScore } from './timePriority.js';
 import { EVENING_START, EVENING_END, OPTIMAL_EVENING } from '../config/constants.js';
 import { timeToMinutes, minutesToTime, durationToMinutes } from '../utils/dateUtils.js';
@@ -97,7 +97,9 @@ function computeDispersionScoreDetail(dates, allDates, { X1 = null, X2 = null, Y
 
   const sortedDates = [...dates].sort();
   // 理想节奏 Z（四舍五入）：[X1, X2] 空当总长扣去 Y 天课程后均分给 Y 门课
-  const Z = Math.max(0, Math.round((dateDiffDays(X1, X2) - 1 - Y) / Y));
+  // v6.0.1 理想节奏下限统一为 1 天：连排不再被视作完美节奏。宽窗口子表原 Z 已 ≥1，
+  // 该下界对它们是恒等变换，仅紧凑窗口（原 round 结果为 0）的子表受影响。
+  const Z = Math.max(1, Math.round((dateDiffDays(X1, X2) - 1 - Y) / Y));
   const idealHalf = Z / 2;
   const linear = (dev) => 100 * Math.max(0, 1 - LINEAR_DECAY_STEP * Math.abs(dev));
 
@@ -468,7 +470,12 @@ export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, 
     const cStart = c.startDate || rangeStart;
     const cEnd = c.endDate || rangeEnd;
     const frags = buildTeacherClassAvailability(monthAvailability, c.teacher, c.classType, baselineCtx, { ...(tailReserve ? { tailReserve } : {}), ...(((cutAfter && !isMergeCourse(c)) ? { cutAfter } : {})), ...(headReserve ? { headReserve } : {}), ...(((cutBefore && !isMergeCourse(c)) ? { cutBefore } : {})) })
-      .filter(f => dateInRange(f.date, cStart, cEnd));
+      .filter(f => dateInRange(f.date, cStart, cEnd))
+      // v6.0.1 日期池口径统一：与槽位层 hasConflict 的首道硬约束（同师资同班每天至多一节）对齐。
+      // buildTeacherClassAvailability 只做「时间段差集」，被先前子表占死的整日仍会残留碎片
+      // （如扣除晚间 19:00-20:30 后仍剩 14:00-18:30），形成「日期层可用、槽位层全灭」的幽灵
+      // 日期，误导 uniform/mid/back 等分散策略的日期布局 → 全部退化到最早连续排。此处前置剔除。
+      .filter(f => !hasTeacherClassOnDate(baselineCtx, { teacher: c.teacher, classType: c.classType, date: f.date }));
     return [...new Set(frags.map(f => f.date))].sort();
   });
   // 任一课程在其区间内毫无可行日期 → 该策略整体不可行
@@ -519,14 +526,32 @@ export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, 
   const countBefore = (pool, d) => { let n = 0; for (const x of pool) if (x < d) n++; return n; };
 
   // 日期预算硬约束（等价主排课 reserveAfter 的 lookahead 上提）：
-  //   正向：候选日期 d 后，任一后续课程 j 仍须保有 ≥ (j-i) 个更大日期；
-  //   反向：候选日期 d 前，任一先序课程 j 仍须保有 ≥ (i-j) 个更小日期。
-  // 链式勾稽保证「逐个选日」时后续课程必然仍有日期可取，从根上杜绝贪心死锁。
+  //   正向：候选日期 d 后，后续同师资同区间课程 j 仍须保有 ≥ 其间课程数的更大日期；
+  //   反向：候选日期 d 前，先序同师资同区间课程 j 仍须保有 ≥ 其间课程数的更小日期。
+  // v6.0：只约束「同师资且课程区间重叠」的课程 —— 与主排 reserveAfter（同师资后续课）
+  // 口径一致；不同师资 / 区间不重叠的课不共享日期链，避免跨师资预算误判不可行。
+  const courseWindow = (c) => ({ start: c.startDate || rangeStart, end: c.endDate || rangeEnd });
+  const windowsOverlap = (a, b) => {
+    if (!a.start || !a.end || !b.start || !b.end) return true;
+    return a.start <= b.end && b.start <= a.end;
+  };
   const budgetOk = (i, d) => {
+    const wi = courseWindow(courses[i]);
+    const related = (j) => courses[j].teacher === courses[i].teacher && windowsOverlap(wi, courseWindow(courses[j]));
     if (reversed) {
-      for (let j = 0; j < i; j++) if (countBefore(pools[j], d) < (i - j)) return false;
+      let rank = 0;
+      for (let j = i - 1; j >= 0; j--) {
+        if (!related(j)) continue;
+        rank++;
+        if (countBefore(pools[j], d) < rank) return false;
+      }
     } else {
-      for (let j = i + 1; j < N; j++) if (countAfter(pools[j], d) < (j - i)) return false;
+      let rank = 0;
+      for (let j = i + 1; j < N; j++) {
+        if (!related(j)) continue;
+        rank++;
+        if (countAfter(pools[j], d) < rank) return false;
+      }
     }
     return true;
   };
@@ -682,7 +707,10 @@ export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, 
       const fxStart = timeToMinutes(fx.startTime);
       const fxEnd = timeToMinutes(fx.endTime);
       slotByIndex[i] = { date: fx.date, startTime: fx.startTime, endTime: fx.endTime, isEvening: isEveningSlot(fxStart, fxEnd) };
-      registerSlot(simCtx, { teacher: course.teacher, classType: course.classType, date: fx.date, startTime: fx.startTime, endTime: fx.endTime });
+      // v6.0：固定槽已由先前子表写入 baseCtx（simCtx 从其深拷贝），避免重复注册污染计数
+      if (!hasTeacherClassOnDate(simCtx, { teacher: course.teacher, classType: course.classType, date: fx.date })) {
+        registerSlot(simCtx, { teacher: course.teacher, classType: course.classType, date: fx.date, startTime: fx.startTime, endTime: fx.endTime });
+      }
       continue;
     }
     let chosenSlot = placeOn(course, dateByIndex[i], i);
@@ -803,6 +831,20 @@ export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, 
     const s = scoreSimulatedPlan({ slots: combo, dates: combo.map(v => v.date), unionDates }, allMonthDates).score;
     if (s > bestBranchScore) { bestBranchScore = s; bestBranch = combo; }
   }
+  // v6.0：逐课明细（供「模拟结果直接落账」与排课报告轨迹使用）
+  const buildSteps = (finalSlots) => finalSlots.map((s, i) => ({
+    index: i,
+    courseName: courses[i].courseName,
+    classType: courses[i].classType,
+    teacher: courses[i].teacher,
+    date: s.date,
+    startTime: s.startTime,
+    endTime: s.endTime,
+    isEvening: !!s.isEvening,
+    timeScore: s.timeScore || 0,
+    fixed: !!(fixedMergeSlots && fixedMergeSlots[i])
+  }));
+
   if (bestBranch) {
     // 阶段四最终方案：总分最高的分支（原槽组合必在其中且日期递增，故一定有解）
     const baseScore = scoreSimulatedPlan({ slots, dates: slots.map(s => s.date), unionDates }, allMonthDates).score;
@@ -811,6 +853,7 @@ export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, 
       slots: bestBranch,
       dates: bestBranch.map(s => s.date),
       unionDates,
+      steps: buildSteps(bestBranch),
       stage3,
       stage4
     };
@@ -818,7 +861,7 @@ export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, 
 
   // v5.64：附带 unionDates（该子表师资-班级空闲时间表日期并集，含 cutAfter 截断，
   // 已定日期合班课不参与）供评分取排课前最终版空闲区间 [X1, X2]
-  return { slots, dates: slots.map(s => s.date), unionDates, stage3, stage4 };
+  return { slots, dates: slots.map(s => s.date), unionDates, steps: buildSteps(slots), stage3, stage4 };
 }
 
 /** 模拟方案的评分 = 分散度评分（日期排序后计算，顺序无关） + 时间优先级（槽位时间分均值，v5.67）；
@@ -925,7 +968,27 @@ export function findBestDispersionPlan(availableDates, totalCourses, teacher, mo
           }
           return rawFree.slots[fi++];
         });
-        return { ...rawFree, slots: fullSlots, dates: fullSlots.map(s => s.date) };
+        // v6.0：逐课明细同步映射回全量索引
+        const freeSteps = rawFree.steps || [];
+        let si = 0;
+        const fullSteps = fixedMergeSlots.map((fx, i) => {
+          const c = courseArr[i];
+          if (fx) {
+            const fxStart = timeToMinutes(fx.startTime);
+            const fxEnd = timeToMinutes(fx.endTime);
+            return {
+              index: i, courseName: c.courseName, classType: c.classType, teacher: c.teacher,
+              date: fx.date, startTime: fx.startTime, endTime: fx.endTime,
+              isEvening: isEveningSlot(fxStart, fxEnd), timeScore: 0, fixed: true
+            };
+          }
+          const st = freeSteps[si++] || {};
+          return {
+            ...st,
+            index: i, courseName: c.courseName, classType: c.classType, teacher: c.teacher, fixed: false
+          };
+        });
+        return { ...rawFree, slots: fullSlots, dates: fullSlots.map(s => s.date), steps: fullSteps };
       })() : rawFree;
       plans.push({ ...raw, strategy, score: scored.score, baseScore: scored.baseScore, timeScoreAvg: scored.timeScoreAvg, detail: scored.detail });
     } catch (e) {

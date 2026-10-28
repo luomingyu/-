@@ -15,10 +15,16 @@
 //   6. 支持"前/后"单边时间窗（v5.75）："周五17点前不排课"=周五 17 点前不排（保留 17 点后）
 //   7. 多日列表与日时间窗（v5.76）："6,7,9,10日不排课"=这些天整天不排；
 //      "6,7,9,10日20点后排课"=这些天 20 点后才可排（等价"20点前不排课"）；日列表内逗号不会被误拆
-//   8. 其余时间不排课（v5.77）："6,7,9日20点后排课，其余时间不排课"=仅这 3 天 20 点后可排，其余日期整天不排
+//   8. 其余时间不排课（v5.77）："6,7,9日20点后排课，其余时间不排课"=仅这 3 天 20 点后可排，其余日期整天不排；
+//      与周几白名单同用时以白名单为准（"周一20点后可排课，周四20点后可排课，其余时间不排课"=仅周一/周四 20 点后可排）
 //   9. 师资冒号分隔（v5.83）："王喆：2026年10月，…"（全角/半角冒号均可，年月不再并进师资名）
 //   10. 日范围（v5.83）："10月1号-10月5号不排课"=1~5 号整天不排（"-/~/到/至"分隔）
 //   11. 无周几时间约束（v5.83）："晚上22点后不排课"=每天 22 点后不排（不必写"每天晚上"）
+//   12. 日范围简写与"半"（v5.85）："5-7日不排课"=5~7 号整天不排；"21日18点半前不排课"=21 日 18:30 前不排
+//   13. 可排课白名单（v5.86）："周一可排课，周三可排课，3号可排课"=仅这些周几/日期可排（其余整天不排），
+//       可与"7号不排课"叠加（禁排优先）；带时间时"周一18点后可排课"=18 点前不排
+//   14. 时间范围写法容错："19-22点"/"19点-22点"/"19:00-22:00"/"19：00-22：00"/"18点30-20点"/
+//       "19点半-22点"及连字符"~ 到 至 – — － ～"均可识别（此前起点带"点/时"或全角冒号会被静默忽略）
 // 输出格式与师资空闲时间表标准格式一致：师资名称 | 日期 | 开始时间 | 结束时间
 
 /** 周几中文/数字 → JS getDay() 值（0=周日） */
@@ -35,6 +41,16 @@ const DEFAULT_SEGMENTS = [
 
 /** 「不排课」类意图（容忍"不能/不可以/可"等插入字）：不排课/不能排课/不上课/不能上课/无空闲（v5.54） */
 const BLOCK_WORDS = /不(?:能|可以|可)?(?:排课|上课|授课)|无空闲/;
+
+/** 「可排课」类意图（v5.86）：可（以）排课 / 能排课；用于白名单模式（仅列出的周几/日期可排） */
+const ALLOW_WORDS = /(?:可|能)(?:以)?(?:排课|上课|授课)/;
+
+/**
+ * 「起点-终点」时间范围：兼容 19-22 / 19-22点 / 19点-22点 / 19:00-22:00 / 19：00-22：00 / 18点30-20点 / 19点半-22点；
+ * 起点与终点均可带「点/时」或冒号（全角/半角）及可选的「分/半」；连字符支持 - ~ 到 至 – — － ～
+ * 分组：[1]=起点时 [2]=起点分(可含"半") [3]=终点时 [4]=终点分(可含"半")
+ */
+const TIME_RANGE_RE = /(\d{1,2})\s*(?:[点时:：]\s*(\d{1,2}|半)?)?\s*分?\s*[-~到至–—－～]\s*(\d{1,2})\s*(?:[点时:：]\s*(\d{1,2}|半)?)?\s*分?/;
 
 /**
  * 解析一行排课要求："师资名，年月，约束1，约束2..."
@@ -174,17 +190,24 @@ function parseConstraint(text, constraints) {
     return;
   }
 
-  // 日范围："10月1号-10月5号不排课" / "1日-5日不排课" → 展开为连续日列表整体禁排
+  // 日范围："10月1号-10月5号不排课" / "1日-5日不排课" / "5-7日不排课" → 展开为连续日列表整体禁排
   // （v5.83；段首/段间容忍"月"字前缀如"10月1号"；"13:00-15:00"时间范围不带"日/号"尾缀不匹配；
-  //   范围+时间窗组合暂不支持，命中即整天禁排）
-  const dayRangeMatch = text.match(/(?:\d{1,2}\s*月)?\s*(\d{1,2})\s*(?:日|号)\s*[-~到至]\s*(?:\d{1,2}\s*月)?\s*(\d{1,2})\s*(?:日|号)/);
-  if (dayRangeMatch && BLOCK_WORDS.test(text)) {
+  //   v5.85：省略起始"日/号"的简写（"5-7日"）也可识别；范围+时间窗组合暂不支持，命中即整天禁排）
+  const dayRangeMatch = text.match(/(?:\d{1,2}\s*月)?\s*(\d{1,2})\s*(?:日|号)?\s*[-~到至]\s*(?:\d{1,2}\s*月)?\s*(\d{1,2})\s*(?:日|号)/);
+  if (dayRangeMatch) {
     const a = parseInt(dayRangeMatch[1], 10);
     const b = parseInt(dayRangeMatch[2], 10);
     const lo = Math.max(1, Math.min(a, b));
     const hi = Math.min(31, Math.max(a, b));
-    for (let d = lo; d <= hi; d++) constraints.push({ type: 'dayOff', day: d });
-    return;
+    if (BLOCK_WORDS.test(text)) {
+      for (let d = lo; d <= hi; d++) constraints.push({ type: 'dayOff', day: d });
+      return;
+    }
+    if (ALLOW_WORDS.test(text)) {
+      // v5.86："5-7日可排课" → 白名单日期范围
+      for (let d = lo; d <= hi; d++) constraints.push({ type: 'dayAllow', day: d });
+      return;
+    }
   }
 
   // 日期列表："11日不排课" / "6,7,9,10日不排课"（多日整体禁排）/ "29日20点后排课"（该日 20 点后才可排）
@@ -194,7 +217,8 @@ function parseConstraint(text, constraints) {
     const days = dayListMatch[1].split(/[,，、]/).map(s => parseInt(s, 10)).filter(d => d >= 1 && d <= 31);
     if (days.length > 0) {
       // X日Y点后/前…：时间窗取"日/号"之后的时间（避免把日列数字当时间）
-      const dayTime = text.match(/(?:日|号)\s*(\d{1,2})(?:[点时:：](\d{1,2})?)?分?/);
+      // v5.85：支持"18点半"（半 → 30 分）
+      const dayTime = text.match(/(?:日|号)\s*(\d{1,2})(?:[点时:：]\s*(\d{1,2}|半)?)?分?/);
       const hasBefore = /前/.test(text);
       const hasAfter = /后/.test(text);
       const pos = /排课|上课|授课/.test(text);
@@ -208,9 +232,11 @@ function parseConstraint(text, constraints) {
           : { type: 'dayBefore', days, time });
         return;
       }
-      // 无时间窗 → 该日期整天不排
+      // 无时间窗 → 该日期整天不排；"3号可排课"（v5.86）→ 白名单日期，仅这些日期可排
       if (neg) {
         for (const d of days) constraints.push({ type: 'dayOff', day: d });
+      } else if (ALLOW_WORDS.test(text)) {
+        for (const d of days) constraints.push({ type: 'dayAllow', day: d });
       }
       return;
     }
@@ -233,19 +259,26 @@ function parseConstraint(text, constraints) {
 
   // 时间段不排课："周一上午9-12点不排课" / "周五晚上17-18点不排课" / "周二13:00-15:00不排课"
   // → 该周几在此时间窗内不排课（不排除整周几，仅扣除该时间段）
-  // 末段"点时"为可选项：纯冒号写法（"13:00-18:00不排课"）也能识别（v5.54）
-  const rangeMatch = timeText.match(/(\d{1,2})(?::(\d{1,2}))?\s*[-~到至]\s*(\d{1,2})(?::(\d{1,2}))?(?:\s*[点时])?/);
-  if (rangeMatch && BLOCK_WORDS.test(text)) {
-    const start = toHHMM(timedHour(text, rangeMatch[1]), rangeMatch[2]);
-    const end = toHHMM(timedHour(text, rangeMatch[3]), rangeMatch[4]);
+  // 时间范围容忍"点/时"、全角冒号、"-/~/到/至/–/—/－/～"等写法（如"19点到22点可排课"）
+  const range = parseTimeRange(timeText, text);
+  if (range && BLOCK_WORDS.test(text)) {
     for (const wd of weekdays) {
-      constraints.push({ type: 'weekdayRange', weekday: wd, start, end });
+      constraints.push({ type: 'weekdayRange', weekday: wd, start: range.start, end: range.end });
     }
     return;
   }
 
-  // 提取时间（如 18点 / 18:00 / 18点30分 / 下午1:00）
-  const timeMatch = timeText.match(/(\d{1,2})(?:[点时:：](\d{1,2})?)?分?/);
+  // v5.86："周一13:00-15:00可排课" → 白名单周几，且仅该时间窗内可排
+  if (range && ALLOW_WORDS.test(text)) {
+    for (const wd of weekdays) {
+      constraints.push({ type: 'weekdayAllow', weekday: wd });
+      constraints.push({ type: 'weekdayAllowRange', weekday: wd, start: range.start, end: range.end });
+    }
+    return;
+  }
+
+  // 提取时间（如 18点 / 18:00 / 18点30分 / 18点半 / 下午1:00）
+  const timeMatch = timeText.match(/(\d{1,2})(?:[点时:：]\s*(\d{1,2}|半)?)?分?/);
   const hasTime = !!timeMatch;
   const isAfter = /后\s*(?:也|都|均|同样)?\s*(?:不(?:能)?(?:排课|上课)|无空闲)/.test(text);
   const isBefore = /前\s*(?:也|都|均|同样)?\s*(?:不(?:能)?(?:排课|上课)|无空闲)/.test(text);
@@ -266,13 +299,40 @@ function parseConstraint(text, constraints) {
     for (const wd of weekdays) {
       constraints.push({ type: 'weekdayOff', weekday: wd });
     }
+  } else if (ALLOW_WORDS.test(text)) {
+    // v5.86："周一可排课" → 白名单周几（仅列出的周几/日期可排）；
+    // 带时间的写法复用既有类型："周一18点后可排课"=18点前不排，"周一18点前可排课"=18点后不排
+    const time = hasTime ? toHHMM(timedHour(text, timeMatch[1]), timeMatch[2]) : null;
+    for (const wd of weekdays) {
+      constraints.push({ type: 'weekdayAllow', weekday: wd });
+      if (time && /后/.test(text)) {
+        constraints.push({ type: 'weekdayBefore', weekday: wd, time });
+      } else if (time && /前/.test(text)) {
+        constraints.push({ type: 'weekdayAfter', weekday: wd, time });
+      }
+    }
   }
 }
 
-/** 时/分 → "HH:MM"，超界收拢到 00-23:59 */
+/**
+ * 解析「起点-终点」时间范围（如"19-22点"/"19点-22点"/"19:00-22:00"），返回 {start, end}（"HH:MM"）；未命中返回 null
+ * 12 小时制换算沿用 text 中的"上午/下午/晚上"修饰
+ */
+function parseTimeRange(timeText, text) {
+  const m = timeText.match(TIME_RANGE_RE);
+  if (!m) return null;
+  return {
+    start: toHHMM(timedHour(text, m[1]), m[2]),
+    end: toHHMM(timedHour(text, m[3]), m[4])
+  };
+}
+
+/** 时/分 → "HH:MM"，超界收拢到 00-23:59；"半"= 30 分（v5.85） */
 function toHHMM(hour, minute) {
   const h = Math.min(23, parseInt(hour, 10));
-  const mi = minute != null ? Math.min(59, parseInt(minute, 10)) : 0;
+  let mi = 0;
+  if (minute === '半') mi = 30;
+  else if (minute != null) mi = Math.min(59, parseInt(minute, 10) || 0);
   return `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`;
 }
 
@@ -328,10 +388,23 @@ export function generateAvailability({ year, month, requirements }) {
       }
     }
 
+    // v5.86："周一可排课 / 3号可排课" → 白名单模式：仅列出的周几与日期可排，其余日期整天跳过
+    const allowWeekdays = new Set();
+    const allowDays = new Set();
+    for (const c of req.constraints) {
+      if (c.type === 'weekdayAllow') allowWeekdays.add(c.weekday);
+      else if (c.type === 'dayAllow') allowDays.add(c.day);
+    }
+    const hasWhitelist = allowWeekdays.size > 0 || allowDays.size > 0;
+
     for (let d = 1; d <= daysInMonth; d++) {
-      if (coveredDays && !coveredDays.has(d)) continue;
       const date = new Date(y, m, d);
       const weekday = date.getDay(); // 0=周日
+      // v5.86：白名单模式，仅列出的周几与日期可排，其余日期整天跳过
+      if (hasWhitelist && !allowWeekdays.has(weekday) && !allowDays.has(d)) continue;
+      // v5.77："其余时间不排课" → 仅被列出的日期可排，其余日期整天不排；
+      // 若同时给出周几/日期白名单（"周一20点后可排课，其余时间不排课"），则以白名单为准
+      if (coveredDays && !coveredDays.has(d) && !allowWeekdays.has(weekday) && !allowDays.has(d)) continue;
 
       let segments = DEFAULT_SEGMENTS.map(s => ({ ...s }));
       for (const c of req.constraints) {
@@ -365,6 +438,15 @@ export function generateAvailability({ year, month, requirements }) {
         }
         if (c.type === 'weekdayRange' && c.weekday === weekday) {
           segments = cutSegments(segments, c.start, c.end);
+        }
+        // v5.86："周一13:00-15:00可排课" → 仅保留该时间窗内的空闲段
+        if (c.type === 'weekdayAllowRange' && c.weekday === weekday) {
+          segments = segments
+            .map(s => ({
+              start: s.start > c.start ? s.start : c.start,
+              end: s.end < c.end ? s.end : c.end
+            }))
+            .filter(s => s.start < s.end);
         }
       }
 

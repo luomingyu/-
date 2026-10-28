@@ -10,6 +10,7 @@ import { parseAvailabilitySheet, parseCourseSystemSheet, parsePresetSheet } from
 import { exportScheduledToExcel, exportAvailabilityToExcel } from '../utils/excelExporter.js';
 import { parseRequirements, generateAvailability } from '../utils/availabilityGenerator.js';
 import { exportCalendarImage } from '../utils/imageExporter.js';
+import { exportCalendarToFeishu, showFeishuNotice } from '../utils/feishuExporter.js';
 
 export function bindEvents() {
   // 初始化年月选择器
@@ -72,68 +73,140 @@ export function bindEvents() {
     }
   });
 
+  // 生成飞书表格：按当前班级/师资筛选，将日历课表输出为飞书在线表格
+  document.getElementById('exportFeishuBtn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    if (btn.disabled) return;
+    const label = btn.querySelector('span:last-child');
+    const originalLabel = label?.textContent || '生成飞书表格';
+    btn.disabled = true;
+    if (label) label.textContent = '生成中...';
+    // 页面内提示条：避免 alert 被拦截/预开空白页导致“点击无反应”
+    showFeishuNotice('info', '正在生成飞书表格，请稍候…');
+    try {
+      const url = await exportCalendarToFeishu(getState());
+      showFeishuNotice('success', '飞书表格已生成：', url);
+      window.open(url, '_blank', 'noopener');
+    } catch (error) {
+      showFeishuNotice('error', `生成飞书表格失败：${error.message}`);
+    } finally {
+      btn.disabled = false;
+      if (label) label.textContent = originalLabel;
+    }
+  });
+
   // 阻止上传按钮、示例表、导出按钮的点击冒泡到 header（避免误触折叠）
   document.querySelectorAll('.upload-btn-wrapper, .example-download, .section-export').forEach(wrapper => {
     wrapper.addEventListener('click', e => e.stopPropagation());
   });
 
-  // 上传：师资空闲时间表（累积添加，每次上传生成一个文件节点）
+  // 上传：师资空闲时间表（v5.98 支持一次选择多个文件，逐文件解析并累积添加）
   document.getElementById('fileInput')?.addEventListener('change', async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    setUploadStatus('availability', '正在解析文件...', 'info');
-    try {
-      const list = await parseAvailabilitySheet(file);
-      addAvailabilityFile(file.name, list);
-      setUploadStatus('availability', `成功导入 ${list.length} 条（来自 ${file.name}）`, 'success');
-    } catch (error) {
-      setUploadStatus('availability', `导入失败：${error.message}`, 'error');
-    }
-    event.target.value = '';
-  });
-
-  // 上传：课程体系表（累积添加）
-  document.getElementById('courseSystemFileInput')?.addEventListener('change', async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    setUploadStatus('courseSystem', '正在解析文件...', 'info');
-    try {
-      const { list, warnings, mixedSheets } = await parseCourseSystemSheet(file);
-      addCourseSystemFile(file.name, list);
-      // v5.83：混合形态子表（既有合班课之前的普通课、又有合班课之后的普通课）暂不做排课处理——
-      // 允许导入但标红 error 警告（列出子表名），排课侧整表跳过并写入报告第八章
-      const mixedWarn = (mixedSheets && mixedSheets.length > 0)
-        ? `🔴 混合形态子表不排课：${mixedSheets.map(m => m.sheetName).join('、')}（先分后合与先合后分并存，请拆分后重新导入）`
-        : '';
-      const warnMsg = (warnings && warnings.length > 0) ? `⚠ ${warnings.join('；')}` : '';
-      const warnParts = [warnMsg, mixedWarn].filter(Boolean);
-      if (warnParts.length > 0) {
-        // v5.73：未识别班级已保留原值继续排课（宽松模式），黄色警告提示
-        const msg = `成功导入 ${list.length} 条（来自 ${file.name}）；${warnParts.join('；')}`;
-        // v5.83：混合形态子表视为 error 标红（仍允许导入），其余未识别班级提示仍为 warning 黄色
-        setUploadStatus('courseSystem', msg, mixedSheets && mixedSheets.length > 0 ? 'error' : 'warning');
-      } else {
-        setUploadStatus('courseSystem', `成功导入 ${list.length} 条（来自 ${file.name}）`, 'success');
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+    setUploadStatus('availability', files.length > 1 ? `正在解析 ${files.length} 个文件...` : '正在解析文件...', 'info');
+    let total = 0;
+    const okFiles = [];
+    const errors = [];
+    for (const file of files) {
+      try {
+        const list = await parseAvailabilitySheet(file);
+        addAvailabilityFile(file.name, list);
+        total += list.length;
+        okFiles.push(file.name);
+      } catch (error) {
+        errors.push(`${file.name}：${error.message}`);
       }
-    } catch (error) {
-      setUploadStatus('courseSystem', `导入失败：${error.message}`, 'error');
+    }
+    if (okFiles.length > 0) {
+      const msg = `成功导入 ${total} 条（来自 ${okFiles.length} 个文件）`;
+      setUploadStatus(
+        'availability',
+        errors.length > 0 ? `${msg}；失败 ${errors.length} 个：${errors.join('；')}` : msg,
+        errors.length > 0 ? 'warning' : 'success'
+      );
+    } else {
+      setUploadStatus('availability', `导入失败：${errors.join('；')}`, 'error');
     }
     event.target.value = '';
   });
 
-  // 上传：已排课表（v5.90，跨科目班级占用约束；累积添加）
+  // 上传：课程体系表（v5.98 支持一次选择多个文件，逐文件解析并累积添加）
+  document.getElementById('courseSystemFileInput')?.addEventListener('change', async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+    setUploadStatus('courseSystem', files.length > 1 ? `正在解析 ${files.length} 个文件...` : '正在解析文件...', 'info');
+    let total = 0;
+    const okFiles = [];
+    const errors = [];
+    const warnParts = [];
+    let hasMixed = false;
+    for (const file of files) {
+      try {
+        const { list, warnings, mixedSheets } = await parseCourseSystemSheet(file);
+        addCourseSystemFile(file.name, list);
+        total += list.length;
+        okFiles.push(file.name);
+        const prefix = files.length > 1 ? `${file.name}：` : '';
+        if (warnings && warnings.length > 0) {
+          warnParts.push(`⚠ ${prefix}${warnings.join('；')}`);
+        }
+        // v5.83：混合形态子表（既有合班课之前的普通课、又有合班课之后的普通课）暂不做排课处理——
+        // 允许导入但标红 error 警告（列出子表名），排课侧整表跳过并写入报告第八章
+        if (mixedSheets && mixedSheets.length > 0) {
+          hasMixed = true;
+          warnParts.push(`🔴 ${prefix}混合形态子表不排课：${mixedSheets.map(m => m.sheetName).join('、')}（先分后合与先合后分并存，请拆分后重新导入）`);
+        }
+      } catch (error) {
+        errors.push(`${file.name}：${error.message}`);
+      }
+    }
+    if (okFiles.length > 0) {
+      // v5.73：未识别班级已保留原值继续排课（宽松模式），黄色警告提示
+      const base = `成功导入 ${total} 条（来自 ${okFiles.length} 个文件）`;
+      const parts = [...warnParts];
+      if (errors.length > 0) parts.push(`失败 ${errors.length} 个：${errors.join('；')}`);
+      const msg = parts.length > 0 ? `${base}；${parts.join('；')}` : base;
+      // v5.83：混合形态子表视为 error 标红（仍允许导入），其余未识别班级提示仍为 warning 黄色
+      const level = (errors.length > 0 || hasMixed) ? 'error' : (warnParts.length > 0 ? 'warning' : 'success');
+      setUploadStatus('courseSystem', msg, level);
+    } else {
+      setUploadStatus('courseSystem', `导入失败：${errors.join('；')}`, 'error');
+    }
+    event.target.value = '';
+  });
+
+  // 上传：已排课表（v5.90，跨科目班级占用约束；v5.98 支持一次选择多个文件并累积添加）
   document.getElementById('presetFileInput')?.addEventListener('change', async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    setUploadStatus('preset', '正在解析文件...', 'info');
-    try {
-      const { list, warnings } = await parsePresetSheet(file);
-      addPresetFile(file.name, list);
-      const warnMsg = (warnings && warnings.length > 0) ? `⚠ ${warnings.join('；')}` : '';
-      const msg = warnMsg ? `成功导入 ${list.length} 条（来自 ${file.name}）；${warnMsg}` : `成功导入 ${list.length} 条（来自 ${file.name}）`;
-      setUploadStatus('preset', msg, warnings && warnings.length > 0 ? 'warning' : 'success');
-    } catch (error) {
-      setUploadStatus('preset', `导入失败：${error.message}`, 'error');
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+    setUploadStatus('preset', files.length > 1 ? `正在解析 ${files.length} 个文件...` : '正在解析文件...', 'info');
+    let total = 0;
+    const okFiles = [];
+    const errors = [];
+    const warnParts = [];
+    for (const file of files) {
+      try {
+        const { list, warnings } = await parsePresetSheet(file);
+        addPresetFile(file.name, list);
+        total += list.length;
+        okFiles.push(file.name);
+        if (warnings && warnings.length > 0) {
+          warnParts.push(`⚠ ${files.length > 1 ? `${file.name}：` : ''}${warnings.join('；')}`);
+        }
+      } catch (error) {
+        errors.push(`${file.name}：${error.message}`);
+      }
+    }
+    if (okFiles.length > 0) {
+      const base = `成功导入 ${total} 条（来自 ${okFiles.length} 个文件）`;
+      const parts = [...warnParts];
+      if (errors.length > 0) parts.push(`失败 ${errors.length} 个：${errors.join('；')}`);
+      const msg = parts.length > 0 ? `${base}；${parts.join('；')}` : base;
+      const level = errors.length > 0 ? 'error' : (warnParts.length > 0 ? 'warning' : 'success');
+      setUploadStatus('preset', msg, level);
+    } else {
+      setUploadStatus('preset', `导入失败：${errors.join('；')}`, 'error');
     }
     event.target.value = '';
   });

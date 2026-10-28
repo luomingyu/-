@@ -1,6 +1,14 @@
-// 班级识别与归类（v5.93）：课程体系表每个子表第一列（A 列）识别为班级名，
-// 并按模糊规则归类到 36 个标准班级白名单；归类后的标准班级名贯穿排课、
+﻿// 班级识别与归类（v6.0.3）：课程体系表每个子表第一列（A 列）识别为班级名，
+// 并按模糊规则归类到标准班级白名单；归类后的标准班级名贯穿排课、
 // 师资-班级空闲时间表、UI 班级筛选与报告全链路。
+//
+// v6.0.3 班级清单结构化（2026-10-27 与业务确认）：白名单由「班级清单 CLASS_LIST」派生，
+//   每条班级记录含三列——年份(27/28)、类型(线上/OMO/标准班/名师)、上架与否(已上架/未上架)。
+//   类型判定规则：含 "OMO" → OMO；含 "标准" → 标准班；含 "名师" → 名师；否则 → 线上。
+//   批量简称改为按属性查询（不再靠名字前缀 + 排除集）：
+//     "27线上所有班" = 年份 27 + 类型 线上 + 已上架（28 同理）；
+//     "27OMO所有班" = 年份 27 + 类型 OMO + 已上架（28 同理）。
+//   新增未上架班级 28全程4期、28OMO5期：纳入白名单可被识别归类，但不参与上述简称展开。
 //
 // 归类规则（2026-09-03 与业务确认）：
 //   1. 精确匹配：trim/去空白/全角转半角后与标准名完全相等
@@ -12,31 +20,71 @@
 //   4. 别名映射：业务确认的营销班名精确映射到标准班（如 "28早鸟腾飞班" → "28早鸟1期"、
 //      "28早鸟" → "28早鸟1期"、"27全程智达培优班" → "27全程1期"），key 为 normalizeForCompare 后的规范化串
 //   4.5 线上班规则：去掉 "线上" 后重新走 1)~4) 归类，"27线上早鸟1期" → "27早鸟1期"、
-//      "28线上标准" → "28标准"；OMO 班型（如 "27线上OMO1期"）与 27名师
-//      （业务确认不在线上映射范围）排除不入此映射，整体未识别
-//   4.6 线上所有班展开："27线上所有班" → 27 所有班（除 OMO 班型与 27名师）共 17 个
-//      标准班合班；"28线上所有班" → 28 所有班（除 OMO 班型与 28标准）共 8 个标准班合班
-//      （v5.84 随 28全程2期 加入由 7 增至 8；v5.86 业务确认 28标准 属线下基础班剔除回 7；
-//       v5.93 随 27新大纲 / 28全程3期 加入分别为 16 → 17、7 → 8）；
+//      "28线上标准" → "28标准"；OMO 班型（如 "27线上OMO1期"）与 名师 班
+//      （类型为「名师」，业务确认不在线上映射范围）排除不入此映射，整体未识别
+//   4.6 线上所有班展开（v6.0.3 改为属性查询）："27线上所有班" → 年份 27 + 类型 线上 + 已上架 的全部标准班
+//      （早鸟/早鸟暑期/早鸟暑期强基、全程1~4期/寒假抢跑/寒假特训/全程培优、智学1~3期、暑期抢跑/暑期超越、百日/新大纲）共 17 个合班；
+//      "28线上所有班" → 28 同上共 8 个（28早鸟1~5期、28全程1~3期；未上架的 28全程4期 与类型为标准班的 28标准 均不计入）合班；
 //      在 classifyClassType 整行级处理（与期数区间展开同级，业务实际数据即此批量写法）
-//   4.7 OMO 所有班展开（v5.85）："27OMO所有班" → 27 所有 OMO 班型 5 个标准班（27OMO1~5期）合班；
-//      "28OMO所有班" → 28 所有 OMO 班型 4 个标准班（28OMO1~4期，v5.93 由 3 增至 4）合班；同样在 classifyClassType 整行级处理
+//   4.7 OMO 所有班展开（v6.0.3 改为属性查询）："27OMO所有班" → 年份 27 + 类型 OMO + 已上架（27OMO1~5期，5 个）合班；
+//      "28OMO所有班" → 28 同上（28OMO1~4期，4 个；未上架的 28OMO5期 不计入）合班；同样在 classifyClassType 整行级处理
 //   5. 命中 0 个或多个候选（歧义，如 "27全程" 无法区分期数）→ 未归类，
 //      由调用方「警告保留原值」继续排课
 import { splitClassTypes } from './classType.js';
 
-/** 36 个标准班级白名单（2026-09-03 业务更新：27 考研 23 班 + 28 考研 13 班；v5.84 新增 28全程2期、28OMO3期；v5.93 新增 27新大纲、28全程3期、28OMO4期） */
-export const STANDARD_CLASSES = [
-  '27早鸟', '27早鸟暑期', '27早鸟暑期强基',
-  '27全程1期', '27全程2期', '27全程3期', '27全程4期',
-  '27全程寒假抢跑', '27全程寒假特训', '27全程培优',
-  '27智学1期', '27智学2期', '27智学3期',
-  '27暑期抢跑', '27暑期超越', '27百日', '27新大纲', '27名师',
-  '27OMO1期', '27OMO2期', '27OMO3期', '27OMO4期', '27OMO5期',
-  '28早鸟1期', '28早鸟2期', '28早鸟3期', '28早鸟4期', '28早鸟5期',
-  '28全程1期', '28全程2期', '28全程3期', '28标准',
-  '28OMO1期', '28OMO2期', '28OMO3期', '28OMO4期'
+/**
+ * 班级清单（v6.0.3，2026-10-27 业务确认）：白名单的唯一来源，每条记录三列——
+ *   name     标准班级名
+ *   year     年份：'27' | '28'
+ *   type     类型：'线上' | 'OMO' | '标准班' | '名师'（判定：含 OMO→OMO；含 标准→标准班；含 名师→名师；否则 线上）
+ *   launched 上架与否：true=已上架 / false=未上架（v6.0.3 新增 28全程4期、28OMO5期 为未上架，其余已上架）
+ * 数组顺序即 STANDARD_CLASSES 顺序（27 系列 → 28 系列，未上架班随所属系列归组）。
+ */
+export const CLASS_LIST = [
+  // ===== 27 系列（27 考研 23 班）=====
+  { name: '27早鸟', year: '27', type: '线上', launched: true },
+  { name: '27早鸟暑期', year: '27', type: '线上', launched: true },
+  { name: '27早鸟暑期强基', year: '27', type: '线上', launched: true },
+  { name: '27全程1期', year: '27', type: '线上', launched: true },
+  { name: '27全程2期', year: '27', type: '线上', launched: true },
+  { name: '27全程3期', year: '27', type: '线上', launched: true },
+  { name: '27全程4期', year: '27', type: '线上', launched: true },
+  { name: '27全程寒假抢跑', year: '27', type: '线上', launched: true },
+  { name: '27全程寒假特训', year: '27', type: '线上', launched: true },
+  { name: '27全程培优', year: '27', type: '线上', launched: true },
+  { name: '27智学1期', year: '27', type: '线上', launched: true },
+  { name: '27智学2期', year: '27', type: '线上', launched: true },
+  { name: '27智学3期', year: '27', type: '线上', launched: true },
+  { name: '27暑期抢跑', year: '27', type: '线上', launched: true },
+  { name: '27暑期超越', year: '27', type: '线上', launched: true },
+  { name: '27百日', year: '27', type: '线上', launched: true },
+  { name: '27新大纲', year: '27', type: '线上', launched: true },
+  { name: '27名师', year: '27', type: '名师', launched: true },
+  { name: '27OMO1期', year: '27', type: 'OMO', launched: true },
+  { name: '27OMO2期', year: '27', type: 'OMO', launched: true },
+  { name: '27OMO3期', year: '27', type: 'OMO', launched: true },
+  { name: '27OMO4期', year: '27', type: 'OMO', launched: true },
+  { name: '27OMO5期', year: '27', type: 'OMO', launched: true },
+  // ===== 28 系列（28 考研 15 班）=====
+  { name: '28早鸟1期', year: '28', type: '线上', launched: true },
+  { name: '28早鸟2期', year: '28', type: '线上', launched: true },
+  { name: '28早鸟3期', year: '28', type: '线上', launched: true },
+  { name: '28早鸟4期', year: '28', type: '线上', launched: true },
+  { name: '28早鸟5期', year: '28', type: '线上', launched: true },
+  { name: '28全程1期', year: '28', type: '线上', launched: true },
+  { name: '28全程2期', year: '28', type: '线上', launched: true },
+  { name: '28全程3期', year: '28', type: '线上', launched: true },
+  { name: '28全程4期', year: '28', type: '线上', launched: false }, // v6.0.3 新增：未上架
+  { name: '28标准', year: '28', type: '标准班', launched: true },
+  { name: '28OMO1期', year: '28', type: 'OMO', launched: true },
+  { name: '28OMO2期', year: '28', type: 'OMO', launched: true },
+  { name: '28OMO3期', year: '28', type: 'OMO', launched: true },
+  { name: '28OMO4期', year: '28', type: 'OMO', launched: true },
+  { name: '28OMO5期', year: '28', type: 'OMO', launched: false } // v6.0.3 新增：未上架
 ];
+
+/** 标准班级白名单（由 CLASS_LIST 派生，保持既有顺序；38 个：27 考研 23 班 + 28 考研 15 班） */
+export const STANDARD_CLASSES = CLASS_LIST.map(c => c.name);
 
 // 业务别名映射（2026-09-03 业务确认）：
 // 营销/宣传班名 → 标准班级名；key 为 normalizeForCompare 后的规范化串
@@ -47,12 +95,9 @@ const CLASS_ALIASES = {
   '27omo': '27OMO1期' // 27OMO 无期数写法 = 27OMO1期
 };
 
-// 业务确认不在线上班映射范围内的班型（v5.80）：27名师 属于线下营销班，不纳入 "27线上X" 映射
-const ONLINE_EXCLUDE = new Set(['27名师']);
-
-// 线上所有班批量写法排除的标准班（v5.86，2026-09-11 业务确认）：28标准 属线下基础班，
-// 不在 "28线上所有班" 范围（28 由 8 个减至 7 个）；27名师 属线下营销班（v5.80 确认）同样排除
-const ONLINE_ALL_EXCLUDE = new Set(['27名师', '28标准']);
+// 业务确认不在线上班映射范围内的班型（v6.0.3 由类型派生）：类型为「名师」的班（27名师）
+// 属线下营销班，不纳入 "27线上X" 单班映射；"线上所有班" 的排除由类型（非线上）自动实现，无需额外集合
+const ONLINE_EXCLUDE = new Set(CLASS_LIST.filter(c => c.type === '名师').map(c => c.name));
 
 // 带期数的班级系列（特征匹配与区间展开用；系列名互不包含，唯一命中才归类）。
 // 注意：27 早鸟无期数（27早鸟/27早鸟暑期/27早鸟暑期强基），28 早鸟带 1~5 期，
@@ -129,34 +174,40 @@ function expandClassRange(raw) {
 }
 
 /**
- * 线上所有班批量写法展开（如 "27线上所有班" → 27 所有班（除 OMO 班型与 27名师）共 17 个
- * 标准班合班，"28线上所有班" → 28 所有班（除 OMO 班型与 28标准）共 8 个标准班合班，v5.93）：
- * 班级清单从 STANDARD_CLASSES 动态筛出（年份匹配、剔除 OMO 班型与 ONLINE_ALL_EXCLUDE，
- * 业务确认 27名师/28标准 属线下班级不在线上范围）。
- * 若筛选结果非空返回标准班名数组，否则返回 null
+ * 按属性查询标准班级（v6.0.3）：year / type / launched 任一为 undefined 则该维度不限制；
+ * 返回命中的标准班名数组（保持 CLASS_LIST 顺序），无命中返回 null
  */
-function expandOnlineAll(raw) {
-  const m = normalizeForCompare(raw).match(/^(2[78])线上所有班$/);
-  if (!m) return null;
-  const year = m[1];
-  const names = STANDARD_CLASSES.filter(
-    s => s.startsWith(year) && !s.includes('OMO') && !ONLINE_ALL_EXCLUDE.has(s)
-  );
+function queryClasses({ year, type, launched }) {
+  const names = CLASS_LIST
+    .filter(c => (year === undefined || c.year === year) &&
+                 (type === undefined || c.type === type) &&
+                 (launched === undefined || c.launched === launched))
+    .map(c => c.name);
   return names.length ? names : null;
 }
 
 /**
- * OMO 所有班批量写法展开（"27OMO所有班" → 27 所有 OMO 班型（27OMO1~5期）5 个标准班合班，
- * "28OMO所有班" → 28 所有 OMO 班型（28OMO1~4期）4 个标准班合班，v5.93）：
- * 班级清单从 STANDARD_CLASSES 动态筛出（年份匹配、班名含 OMO），
- * 随白名单增减自动生效，无需维护班级个数。若筛出非空返回标准班名数组，否则返回 null
+ * 线上所有班批量写法展开（v6.0.3 改为按属性查询）："27线上所有班" → 年份 27 + 类型 线上 + 已上架
+ * 共 17 个标准班合班（早鸟/早鸟暑期/早鸟暑期强基、全程1~4期/寒假抢跑/寒假特训/全程培优、
+ * 智学1~3期、暑期抢跑/暑期超越、百日/新大纲）；"28线上所有班" → 28 同上共 8 个标准班合班
+ * （28早鸟1~5期、28全程1~3期；未上架的 28全程4期 与类型为标准班 的 28标准 均不计入）。
+ * 无命中返回 null
+ */
+function expandOnlineAll(raw) {
+  const m = normalizeForCompare(raw).match(/^(2[78])线上所有班$/);
+  if (!m) return null;
+  return queryClasses({ year: m[1], type: '线上', launched: true });
+}
+
+/**
+ * OMO 所有班批量写法展开（v6.0.3 改为按属性查询）："27OMO所有班" → 年份 27 + 类型 OMO + 已上架
+ * （27OMO1~5期，5 个）合班；"28OMO所有班" → 28 同上（28OMO1~4期，4 个；未上架的 28OMO5期 不计入）合班。
+ * 随班级清单增减自动生效，无需维护班级个数。无命中返回 null
  */
 function expandOmoAll(raw) {
   const m = normalizeForCompare(raw).match(/^(2[78])omo(?:所有|全部)班$/);
   if (!m) return null;
-  const year = m[1];
-  const names = STANDARD_CLASSES.filter(s => s.startsWith(year) && s.includes('OMO'));
-  return names.length ? names : null;
+  return queryClasses({ year: m[1], type: 'OMO', launched: true });
 }
 
 /**
@@ -253,14 +304,14 @@ export function classifyClassType(classType) {
       expanded.push(...rangeNames);
       continue;
     }
-    // ①.5 线上所有班批量写法（"27线上所有班" → 17 个标准班合班；"28线上所有班" → 8 个，
-    // v5.86 剔除 28标准；v5.93 随 27新大纲 / 28全程3期 加入）
+    // ①.5 线上所有班批量写法（v6.0.3 属性查询：年份 + 类型线上 + 已上架 → "27线上所有班" 17 个、
+    // "28线上所有班" 8 个；未上架的 28全程4期 与类型为标准班 的 28标准 不计入）
     const allOnline = expandOnlineAll(raw);
     if (allOnline) {
       expanded.push(...allOnline);
       continue;
     }
-    // ①.6 OMO 所有班批量写法（"27OMO所有班" → 5 个 OMO 班型；"28OMO所有班" → 4 个，v5.93）
+    // ①.6 OMO 所有班批量写法（v6.0.3 属性查询：年份 + 类型 OMO + 已上架 → "27OMO所有班" 5 个、"28OMO所有班" 4 个）
     const allOmo = expandOmoAll(raw);
     if (allOmo) {
       expanded.push(...allOmo);

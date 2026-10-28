@@ -37,9 +37,13 @@ export const W_PROGRESSION = 5; // 日期递增（课程体系顺序）
  *                               排课时须保证本课之后仍有足够可用日期，否则后续课程将无日期可排）
  * @param {string|null} earliestDate 日期下界（v5.83，先合后分侧：位于已定日期合班课之后的普通课，
  *                                   限定在该合班课日期后一天之后排课）
+ * @param {boolean} allowSameDay 兜底放宽（仅第三轮调用时为 true）：忽略「同一师资+同一班级每天
+ *                               只能排一节课」整日封锁，允许同天不同时段再排一节；此时仍按
+ *                               minGap（师资间隔，放宽轮取 AVAIL_REMOVE_PAD_TEACHER）与
+ *                               CLASS_MIN_GAP（班级间隔）判定时间窗冲突。
  * @returns {{date, startTime, endTime} | null}
  */
-export function tryScheduleCourse(ctx, courseItem, teacher, targetDates, minGap, previousDate = null, allAvailableDates = [], preferredSlot = null, latestDate = null, earliestFirst = false, reserveAfter = 1, earliestDate = null) {
+export function tryScheduleCourse(ctx, courseItem, teacher, targetDates, minGap, previousDate = null, allAvailableDates = [], preferredSlot = null, latestDate = null, earliestFirst = false, reserveAfter = 1, earliestDate = null, allowSameDay = false) {
   const { classType, duration, startDate, endDate } = courseItem;
   const durationMinutes = durationToMinutes(duration);
   // v5.51：解析锚点——对象槽位提取日期（时段可能为空），兼容旧的纯日期字符串
@@ -82,10 +86,13 @@ export function tryScheduleCourse(ctx, courseItem, teacher, targetDates, minGap,
   }
 
   // 计算已占用的日期（排除"师资+班级"当天已有课程的日期，硬约束）
+  // allowSameDay=true（兜底放宽）：不把整日封锁计入占用，保留同天候选交由后续评分
   const occupiedDates = new Set();
-  for (const date of effectiveTargetDates) {
-    if (hasTeacherClassOnDate(ctx, { teacher, classType, date })) {
-      occupiedDates.add(date);
+  if (!allowSameDay) {
+    for (const date of effectiveTargetDates) {
+      if (hasTeacherClassOnDate(ctx, { teacher, classType, date })) {
+        occupiedDates.add(date);
+      }
     }
   }
 
@@ -119,7 +126,8 @@ export function tryScheduleCourse(ctx, courseItem, teacher, targetDates, minGap,
   for (const targetDate of effectiveTargetDates) {
     // 硬约束上提：同一天同一师资同一班级只能排一节课，直接跳过整个日期
     // 避免对该日期的所有时间槽重复调用 hasConflict
-    if (hasTeacherClassOnDate(ctx, { teacher, classType, date: targetDate })) {
+    // allowSameDay=true（兜底放宽）：不跳过，交给下方 hasConflict 按时间窗（含 minGap）判定
+    if (!allowSameDay && hasTeacherClassOnDate(ctx, { teacher, classType, date: targetDate })) {
       if (!!process.env.SCHEDULE_DEBUG) console.log(`    跳过日期 ${targetDate}（当天师资+班级已有课程，硬约束）`);
       continue;
     }
@@ -146,7 +154,7 @@ export function tryScheduleCourse(ctx, courseItem, teacher, targetDates, minGap,
         const slotEnd = slotStart + durationMinutes;
         if (slotEnd > availEnd) break;
 
-        if (hasConflict(ctx, { teacher, classType, date: targetDate, slotStart, slotEnd, minGap })) {
+        if (hasConflict(ctx, { teacher, classType, date: targetDate, slotStart, slotEnd, minGap, allowSameDay })) {
           continue;
         }
 

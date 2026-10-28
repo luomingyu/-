@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
 import { runServerSchedule, needsScheduleUpgrade, upgradeStoredData, APP_VERSION } from './schedule.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -140,6 +141,199 @@ function readBody(req) {
   });
 }
 
+// ---------- 飞书在线表格 ----------
+const LARK_PLUGIN_DIR = path.join(os.homedir(), '.trae-cn', 'plugins', 'trae-remote-official', 'lark');
+
+/** 定位 lark-cli：优先环境变量，其次插件目录（取最高版本），最后回退 PATH */
+function resolveLarkCli() {
+  const exe = process.platform === 'win32' ? 'lark-cli.exe' : 'lark-cli';
+  const fromEnv = process.env.LARK_CLI_PATH;
+  if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
+  try {
+    const versions = fs.readdirSync(LARK_PLUGIN_DIR)
+      .filter(v => fs.existsSync(path.join(LARK_PLUGIN_DIR, v, 'bin', exe)))
+      .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+    if (versions.length > 0) return path.join(LARK_PLUGIN_DIR, versions[0], 'bin', exe);
+  } catch {
+    // 插件目录不存在时走 PATH
+  }
+  return exe;
+}
+
+/** 读取 JWT 的过期时间戳（秒），解析失败返回 0 */
+function tokenExpireAt(token) {
+  try {
+    const payload = JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString('utf8'));
+    return Number(payload.exp) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** 飞书凭证：优先用当前进程环境变量，其次用本机保存的凭证文件（取过期时间更晚的） */
+function resolveLarkEnv() {
+  const env = { ...process.env };
+  const filePath = path.join(os.homedir(), '.lark-cli', 'trae-credentials.json');
+  let saved = null;
+  try {
+    saved = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    saved = null;
+  }
+  if (!saved?.userAccessToken) return env;
+
+  const envToken = process.env.LARKSUITE_CLI_USER_ACCESS_TOKEN;
+  const useSaved = !envToken || tokenExpireAt(saved.userAccessToken) > tokenExpireAt(envToken);
+  if (useSaved) {
+    env.LARKSUITE_CLI_USER_ACCESS_TOKEN = saved.userAccessToken;
+    if (saved.appId) env.LARKSUITE_CLI_APP_ID = saved.appId;
+    if (saved.brand) env.LARKSUITE_CLI_BRAND = saved.brand;
+  }
+  return env;
+}
+
+/** 执行 lark-cli（参数数组直传，避免 shell 引号转义问题），返回解析后的 JSON */
+function runLarkCli(args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(resolveLarkCli(), args, { windowsHide: true, env: resolveLarkEnv() });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      reject(new Error('飞书接口调用超时（60 秒）'));
+    }, 60000);
+
+    child.stdout.on('data', chunk => { stdout += chunk; });
+    child.stderr.on('data', chunk => { stderr += chunk; });
+    child.on('error', err => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(new Error(`无法启动飞书 CLI：${err.message}`));
+    });
+    child.on('close', code => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      const raw = (stdout || stderr).trim();
+      let json = null;
+      try {
+        json = JSON.parse(raw);
+      } catch {
+        const start = raw.indexOf('{');
+        if (start >= 0) {
+          try { json = JSON.parse(raw.slice(start)); } catch { /* 非 JSON 输出 */ }
+        }
+      }
+      resolve({ code, json, raw });
+    });
+  });
+}
+
+const COL_LETTERS = 'ABCDEFG';
+
+/**
+ * 把按周分块的日历组装成飞书表格的 --values / --styles
+ * 布局：第 1 行标题（合并 A1:G1）、第 2 行星期表头，之后每周一块；
+ * 每块第一行是日期，其后每行对应各天的一节课（格内为班级名称/课节名称/授课师资/授课时间）
+ */
+function buildFeishuSheetArgs(title, subtitle, weekdays, weeks) {
+  const values = [
+    [subtitle ? `${title}\n${subtitle}` : title, '', '', '', '', '', ''],
+    weekdays
+  ];
+
+  const border = { style: 'solid', weight: 'thin', color: '#D0D7DE' };
+  const cellStyles = [
+    {
+      range: 'A1:G1',
+      font_weight: 'bold', font_size: 15, font_color: '#1F2329',
+      horizontal_alignment: 'center', vertical_alignment: 'middle',
+      background_color: '#EAF2FF', word_wrap: 'auto-wrap', border
+    },
+    {
+      range: 'A2:G2',
+      font_weight: 'bold', font_size: 11, font_color: '#333333',
+      horizontal_alignment: 'center', vertical_alignment: 'middle',
+      background_color: '#F2F5F9', word_wrap: 'auto-wrap', border
+    }
+  ];
+  const rowSizes = [
+    { range: '1:1', size: 50 },
+    { range: '2:2', size: 30 }
+  ];
+
+  let row = 3;
+  for (const week of weeks) {
+    const days = week.days || [];
+    const maxCourses = days.reduce((max, d) => Math.max(max, (d.courses || []).length), 0);
+    const dateRow = row;
+    const courseStart = dateRow + 1;
+    const courseEnd = dateRow + maxCourses;
+
+    // 日期行
+    values.push(days.map(d => d.date || ''));
+    rowSizes.push({ range: `${dateRow}:${dateRow}`, size: 26 });
+    cellStyles.push({
+      range: `A${dateRow}:G${dateRow}`,
+      font_weight: 'bold', font_size: 10, font_color: '#1F2329',
+      horizontal_alignment: 'center', vertical_alignment: 'middle',
+      background_color: '#F2F5F9', word_wrap: 'auto-wrap', border
+    });
+
+    // 课程行：每行对应该周各天的第 i 节课
+    for (let i = 0; i < maxCourses; i++) {
+      const r = courseStart + i;
+      values.push(days.map(d => {
+        const course = (d.courses || [])[i];
+        if (!course) return '';
+        return [course.className, course.lessonName, course.teacher, course.time]
+          .filter(Boolean)
+          .join('\n');
+      }));
+      rowSizes.push({ range: `${r}:${r}`, size: 64 });
+    }
+    if (maxCourses > 0) {
+      cellStyles.push({
+        range: `A${courseStart}:G${courseEnd}`,
+        font_size: 10, font_color: '#1F2329',
+        horizontal_alignment: 'left', vertical_alignment: 'top',
+        word_wrap: 'auto-wrap', border
+      });
+    }
+
+    // 非本月补位格：浅灰底 + 灰字（放在通用样式之后，覆盖生效）
+    days.forEach((d, index) => {
+      if (!d.otherMonth) return;
+      const col = COL_LETTERS[index];
+      cellStyles.push({ range: `${col}${dateRow}`, background_color: '#FAFBFC', font_color: '#9AA4B2' });
+      if (maxCourses > 0) {
+        cellStyles.push({ range: `${col}${courseStart}:${col}${courseEnd}`, background_color: '#FAFBFC' });
+      }
+    });
+
+    row = courseEnd + 1;
+  }
+
+  const styles = [{
+    name: 'Sheet1',
+    cell_merges: [{ range: 'A1:G1' }],
+    cell_styles: cellStyles,
+    col_sizes: [{ range: 'A:G', size: 168 }],
+    row_sizes: rowSizes,
+    freeze: { rows: 2 }
+  }];
+
+  return ['sheets', '+workbook-create',
+    '--title', title,
+    '--values', JSON.stringify(values),
+    '--styles', JSON.stringify({ styles })];
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
@@ -188,6 +382,51 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       res.writeHead(405).end('Method Not Allowed');
+      return;
+    }
+
+    // 飞书在线表格 API：把前端组装的按月日历写成飞书表格
+    if (url.pathname === '/api/feishu-sheet') {
+      if (req.method !== 'POST') {
+        res.writeHead(405).end('Method Not Allowed');
+        return;
+      }
+      const body = JSON.parse(await readBody(req) || '{}');
+      const title = String(body.title || '').trim() || '课表';
+      const subtitle = String(body.subtitle || '').trim();
+      const weekdays = Array.isArray(body.weekdays) ? body.weekdays.map(String) : [];
+      const weeks = Array.isArray(body.weeks) ? body.weeks : [];
+
+      const weeksValid = weeks.length > 0 &&
+        weeks.every(w => Array.isArray(w?.days) && w.days.length === 7);
+      if (weekdays.length !== 7 || !weeksValid) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: '日历数据不完整（需要 7 个星期表头 + 每周 7 天）' }));
+        return;
+      }
+
+      let result;
+      try {
+        result = await runLarkCli(buildFeishuSheetArgs(title, subtitle, weekdays, weeks));
+      } catch (err) {
+        result = { json: null, raw: err.message, code: -1 };
+      }
+
+      if (!result.json || result.json.ok !== true) {
+        const message = result.json?.error?.message || result.raw || `飞书 CLI 退出码 ${result.code}`;
+        const hint = /auth|token|credential|permission|not.?configured/i.test(message)
+          ? '（飞书登录凭证缺失或已过期：请在已登录飞书的 Trae 终端执行 npm run lark:token 刷新凭证后重试）'
+          : '';
+        console.error('[飞书] 生成表格失败:', message);
+        res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: `生成飞书表格失败：${message}${hint}` }));
+        return;
+      }
+
+      const sheet = result.json.data?.spreadsheet || {};
+      console.log(`[飞书] 已生成表格: ${sheet.url || sheet.spreadsheet_token} (${title})`);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ ok: true, url: sheet.url, token: sheet.spreadsheet_token }));
       return;
     }
 
@@ -243,7 +482,13 @@ if (needsScheduleUpgrade(latestData)) {
     console.warn('[自检] 自动升级失败，保持原数据启动（前端打开页面时会再尝试自动重排）');
   }
 } else {
-  console.log(`[自检] 数据版本已是最新 (${latestData.scheduleReports?.[0]?.appVersion || '无排课记录'})`);
+  const storedVersion = latestData.scheduleReports?.[0]?.appVersion || '无排课记录';
+  const hasCourseData = Array.isArray(latestData.courseSystemFiles) && latestData.courseSystemFiles.length > 0;
+  if (storedVersion !== APP_VERSION && !hasCourseData) {
+    console.warn(`[自检] 数据版本 ${storedVersion} ≠ 当前代码 ${APP_VERSION}，但服务器无课程体系数据（仅有历史报告），无法自动重排；请在页面导入课程体系后重新排课`);
+  } else {
+    console.log(`[自检] 数据版本已是最新 (${storedVersion})`);
+  }
 }
 
 server.listen(PORT, '0.0.0.0', () => {

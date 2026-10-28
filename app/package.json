@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "serve": "node ../server/index.mjs",
+    "lark:token": "node scripts/save-lark-token.mjs",
     "sync": "npm run build && node scripts/regen-backend-schedule.mjs"
   },
   "dependencies": {

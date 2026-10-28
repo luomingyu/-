@@ -3,7 +3,7 @@
 // ------------------------------------------------------------
 // 每次排课成功后生成一份 markdown 文档，包含：
 //   一、排课逻辑说明
-//   二、科目师资表（v5.94 起独立成章，含 408计算机 科目说明）
+//   二、科目师资表（v5.94 起独立成章，含 408计算机 / 日语 科目说明）
 //   三、师资难易程度评估与排课顺序
 //   四、排课结果摘要
 //   五、各子表分散排课策略详情与评分（v5.62 起独立成章；此前为「三之（下）」）
@@ -13,14 +13,14 @@
 //   首部另含目录（TOC，v5.62），可快速跳转各章节
 // 输入：generateSchedule() 的返回值 result（含 diagnostics.teacherOrder / scheduleTrace.steps / scheduleTrace.firstLessons）
 // ============================================================
-import { AVAIL_REMOVE_PAD, AVAIL_REMOVE_PAD_TEACHER } from './constants.js';
-import { SUBJECT_TEACHERS, SUBJECT_PRIORITY } from '../config/constants.js';
+import { AVAIL_REMOVE_PAD, AVAIL_REMOVE_PAD_TEACHER, CLASS_MIN_GAP } from './constants.js';
+import { SUBJECT_TEACHERS, SUBJECT_PRIORITY, inferPresetSubject } from '../config/constants.js';
 import { applyCutAfter, applyCutBefore } from './scheduleContext.js';
 
 // 排课算法版本：仅在排课算法变更时递增，页面顶部「算法」徽标展示用。
 // 注意：报告头部与落库报告记录的版本号已统一为「应用版本」（config/constants.js 的 APP_VERSION），
 // 由 pipeline.js 通过 meta.appVersion 传入，与算法版本解耦。
-export const ALGORITHM_VERSION = 'v5.89';
+export const ALGORITHM_VERSION = 'v6.0.4';
 
 /** 将「当日分钟数」格式化为 HH:MM，用于报告中切割时刻示例随 X（AVAIL_REMOVE_PAD）动态取值 */
 function hm(minutes) {
@@ -33,6 +33,8 @@ const CN = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '
 
 /** 扣除维度标签（v5.73：index.js isRelevantExcludedCourse 返回的维度标识 → 中文） */
 const EXCL_DIM_LABEL = { teacher: '师资占用', class: '班级占用', tailReserve: '尾段预留', headReserve: '头段预留' };
+/** 已排课表（preset）扣除维度标签（v5.99） */
+const PRESET_DIM_LABEL = { presetTeacher: '师资占用', presetClass: '班级占用' };
 
 /** 目录锚点（github-slugger 兼容：小写后删除 ASCII/中文全角标点（如「、」），字母数字/CJK/连字符/下划线保留，空格逐个转连字符；与 GitHub / VS Code / Typora 渲染生成的标题 id 一致） */
 function mdAnchor(text) {
@@ -46,7 +48,8 @@ function mdCell(v) {
 
 /** 排课逻辑说明（静态文本，与 scheduler/index.js 实现保持一致） */
 const LOGIC_SECTIONS = [
-  ['师资排课顺序', '先按科目确立大体师资顺序（英语 > 政治 > 数学 > 408计算机 > 未收录科目，v5.25 科目师资表，见第三章）；科目内再按师资难易程度降序确定最终师资排课顺序，难排的师资优先排课（v5.36/v5.37，见第三章）。'],
+  ['师资排课顺序', '先按科目确立大体师资顺序（英语 > 政治 > 数学 > 408计算机 > 日语 > 未收录科目，v5.25 科目师资表，v5.95 新增日语，见第二章）；科目内再按师资难易程度降序确定最终师资排课顺序，难排的师资优先排课（v5.36/v5.37，见第三章）。'],
+  ['科目互斥', '同一班级同一时间段默认全科目互斥（v5.95 起支持部分互斥）：日语仅与「日语 / 政治 / 数学」互斥，与英语、408计算机可在同班同一时间段并存；日语课之间（同班）仍互斥。已排课表（v5.99）按**授课师资名称**归类科目后参与同一互斥矩阵（与课程体系表使用同一份师资名单，如英语师资的已排课不阻挡日语）；师资不在名单中时保守按全互斥处理。互斥判定同时作用于班级冲突检测与师资-班级空闲时间表扣除；其中空闲表扣除口径更窄（v5.96）：日语师资仅扣除同班「政治 / 数学」课节及自身课节，同班英语、408计算机、日语（其他师资）均不扣除；已排课表（v5.99）按硬互斥口径扣除，归类为英语/408计算机时不扣除。'],
   ['师资难易程度', '难易程度 = 该师资课程时间总需求 ÷ 空闲时间总量（v5.11）。比值越大排课越困难越优先；无空闲时间的师资（∞）在该科目内最优先排课。'],
   ['子表间排序', '按师资排课顺序排对应子表（v5.37）：先遍历师资（科目 → 科目内难易程度），同一师资的多个子表按「时间密度 L = M / N」升序优先排课（v5.88，替换 v5.37「课程数量降序」）——N = 子表全部课程数，M = 子表中「起始日期」「终止日期」均非空行的「最晚终止日期 − 最早起始日期 + 1 天」（含首尾，如 10-01~10-10 = 10 天），缺任一日期的行跳过、全缺则该子表 L = ∞ 排最后；L 越小（单位课程可用天数越少）越紧张越先排。L 相同按课程数量降序，再相同按子表出现顺序。子表归属师资取该子表内课时数最多的师资。示例：师资A 的课程在子表 1/2/3/4，L 分别为 6.0/3.0/4.5/∞ → 按 L 升序排子表 2,3,1,4；师资B 的课程在子表 5/7 → 子表 5,7，整体排课次序为 子表 2,3,1,4,5,7,6。'],
   ['子表内行序', '严格按行顺序（orderInSheet）排课；同一班级的课程日期严格递增（v5.32 班级维度递增，不同班级互不阻塞）。'],
@@ -59,10 +62,10 @@ const LOGIC_SECTIONS = [
   ['合班课之前截断', () => `v5.83 先合后分（post-merge）形态子表的新约束，严格镜像「合班课之后截断」：若子表中含有「已排日期」的合班课，在生成该子表师资-班级空闲时间表时，删除最后一个合班课时间段之前的所有空闲时间：切割时刻 = 合班课结束时间 + ${AVAIL_REMOVE_PAD} 分钟缓冲（如合班课 8/22 17:00-19:00，X=${AVAIL_REMOVE_PAD} 时 → 切割时刻 8/22 ${hm(19 * 60 + AVAIL_REMOVE_PAD)}；删除该切割时刻前的全部碎片），使本子表普通课的候选时间域收缩到最后一个合班课结束之后，避免普通课占用合班课及其前的日期域。`],
   ['日期下界', 'v5.83 先合后分（post-merge）形态子表的新约束，严格镜像日期上界（v5.34 latestDate = dayBefore）：正序逐行扫描子表，普通课的日期下界 = 其行序之前最近一个已定日期合班课日期的后一天（dayAfter），限定该普通课只能排在下界（含）之后。合班课自身与对齐课豁免（与上界对合班课/对齐课豁免严格对称）。'],
   ['混合形态报错', 'v5.83 混合形态子表（行序上既有合班课之前又有合班课之后的普通课，即先分后合与先合后分并存）暂不做排课处理：该子表整表跳过排课，报告新增「九、未处理子表（混合形态）」错误章节逐表列出原因，课程体系表上传页同步标红警告（不影响导入）。'],
-  ['已排课表约束', 'v5.90 已排课表为**跨科目班级占用约束**表：含班级、课节名称、授课日期、授课时间，与师资空闲时间表、课程体系表**科目隔离**（已排课表不涉及本排课师资与课程，如已排课表=英语既定课表，本排课=数学/政治）。排课前将表内全部条目**预注册到班级占用域**（仅班级维度，不写师资维度，故不触发「每天至多一节」师资硬约束；同一班级同一时间段只能上一门课）：建师资-班级空闲时间表时自动从对应班级空闲域扣除该时段，备选槽经班级冲突检测兜底避让。**空/无已排课表时本约束零影响**，排课结果与未接入前完全一致（回归兼容）。'],
+  ['已排课表约束', 'v5.90 已排课表为**跨科目班级占用约束**表：含班级、课节名称、授课日期、授课时间，与师资空闲时间表、课程体系表**科目隔离**（已排课表不涉及本排课师资与课程，如已排课表=英语既定课表，本排课=数学/政治）。排课前将表内全部条目**预注册到占用域**：①班级维度（始终）→ 同一班级同一时间段只能上一门课，建师资-班级空闲时间表时从班级空闲域扣除该时段；②师资维度（v5.91，师资列非空）→ 该师资自身档期按前后各 Y 分钟缓冲扣除；两维度均不写「每天至多一节」计数，不触发师资每日节数硬约束。v5.99 起条目科目**按授课师资名称归类**（与课程体系表同一份师资名单），参与科目部分互斥与空闲表扣除（如英语师资的已排课不阻挡日语）；师资不在名单中时按全互斥保守处理。**空/无已排课表时本约束零影响**。'],
   ['日期预算', 'v5.34.1 合班课优先尽早排入；v5.34.2 按「本课及后续同师资课程所需日期数」做日期预算硬约束，避免分散度偏好拖占后续课程的可用日期。'],
-  ['分散方案锚定', 'v5.51 起「模拟排课生成」：以师资-班级空闲时间表为候选时段池，按师资×班级逐门模拟排课（时段可放性 + 师资并发互斥/班级冲突硬约束，已排槽位逐步注册累积为后续课程的占用约束），多种策略各产出一种完整可行的「日期+时段」槽位序列方案，按「分散度评分（v5.64 起 Z 规则：均匀度 + 覆盖范围 + 中段覆盖奖励 + 起始留白 + 终止留白 + 间隔匹配）+ 槽位时间优先级均值（v5.67）」选分数最高者为最终方案。v5.53 起策略扩为 10 个（原 5 个：晚间优先分散、晚间优先分散倒序、分散优先、晚间+时间分、时间分优先；新增 5 个：晚间+周末、日间优先、月初前载、月末后载、晚间/日间交替），v5.54 增 1 个贪心策略（greedy-earliest：日期层从最早可行日期逐日排课 + 槽位层取当日最早空闲时段），v5.55 再增 1 个月中向两边最大分散策略（mid-spread：以每月中间 15/16 日为轴心、在可行跨度上向月初/月末两侧全额铺开，覆盖范围最大化），v5.56 再增 1 个贪心+启发式策略（greedy-heuristic：每步选一天，启发式估计函数按子表数据预估剩余课程的潜在分散评分，权重随跨度疏密/受限课程占比自适应并迭代精炼至该子表最优），共 13 个，由 STRATEGY_META 按 dayWeight（日期层位置分布）+ dayPref（日期偏好）+ slotMode（选槽偏好）三特征组合出差异化方案。排课时将方案中按行序对应的锚点槽位（日期+时段）作为计划槽传入：槽位完整可行时直接锁定（最高优先级，10000 分阈值），槽位被占用/不可行时自动近邻回退评分（锚点日奖励权重×10，±1天→70/±3天→50/±7天→30），避免月底课程被局部递增奖励持续挤压成连排。少课（<4门）沿用 v5.47 区间等分锚点并升级为就近选取「覆盖晚间」的可行时段槽；v5.41 子表整体分散语义保留（合班课与所在子表前面普通课共享同一套锚点序列）。v5.52 起排课报告新增「各子表分散排课策略详情与评分 + 模拟日历表」章节：逐策略展示评分明细（均匀度/覆盖范围/中段覆盖/起始留白/终止留白/间隔匹配）与模拟槽位序列，并对选中方案生成模拟日历表。v5.64 起分散基础分改为「Z 规则」三项核心评分：以排课前最终版师资-课程空闲时间表区间 [X1, X2] 与未定时间课程数 Y 计算理想节奏 Z = round((X2-X1-1-Y)/Y)；三项偏差（起始留白 (W1-X1-1)-Z/2、终止留白 (X2-W2-1)-Z/2、相邻间隔 W3-Z）各按线性衰减 100×max(0, 1−0.1·|D|) 评分（v5.66；v5.64 曾为高斯 100×e^(-0.1·D²)，对远偏差惩罚过陡），偏差 0 分最高、偏差越大分越低；同名替换旧「最小间隔/平衡性/大小间隔惩罚/端距留白」维度（平衡性并入间隔项），保留均匀度/覆盖范围/中段覆盖。'],
-  ['兜底补排', '每门课先按师资-班级空闲时间表 + Z 规则分散方案锚点/时段偏好正常排课（间隔统一 MIN_GAP=10 分钟，晚间偏好由时间分数权重承载；v5.10 六级「仅晚上/所有空闲 × 10/5/0 分钟间隔」回退仅第一级实际触发，2-6 级从未生效已移除；v5.65 移除 v5.10 槽位级间隔天数分散度奖励 calculateDispersionBonus——实测选中槽位 100% 为锚点全等锁定且去掉该奖励后胜者 0 次变化，分散语义由 v5.64 Z 规则方案评分唯一承载）；失败后第二阶段用原始空闲时间兜底补排，冲突由 hasConflict 兜底检测。']
+  ['分散方案锚定', 'v5.51 起「模拟排课生成」：以师资-班级空闲时间表为候选时段池，按师资×班级逐门模拟排课（时段可放性 + 师资并发互斥/班级冲突硬约束，已排槽位逐步注册累积为后续课程的占用约束），多种策略各产出一种完整可行的「日期+时段」槽位序列方案，按「分散度评分（v5.64 起 Z 规则：均匀度 + 覆盖范围 + 中段覆盖奖励 + 起始留白 + 终止留白 + 间隔匹配）+ 槽位时间优先级均值（v5.67）」选分数最高者为最终方案。v5.53 起策略扩为 10 个（原 5 个：晚间优先分散、晚间优先分散倒序、分散优先、晚间+时间分、时间分优先；新增 5 个：晚间+周末、日间优先、月初前载、月末后载、晚间/日间交替），v5.54 增 1 个贪心策略（greedy-earliest：日期层从最早可行日期逐日排课 + 槽位层取当日最早空闲时段），v5.55 再增 1 个月中向两边最大分散策略（mid-spread：以每月中间 15/16 日为轴心、在可行跨度上向月初/月末两侧全额铺开，覆盖范围最大化），v5.56 再增 1 个贪心+启发式策略（greedy-heuristic：每步选一天，启发式估计函数按子表数据预估剩余课程的潜在分散评分，权重随跨度疏密/受限课程占比自适应并迭代精炼至该子表最优），共 13 个，由 STRATEGY_META 按 dayWeight（日期层位置分布）+ dayPref（日期偏好）+ slotMode（选槽偏好）三特征组合出差异化方案。排课时将方案中按行序对应的锚点槽位（日期+时段）作为计划槽传入：槽位完整可行时直接锁定（最高优先级，10000 分阈值），槽位被占用/不可行时自动近邻回退评分（锚点日奖励权重×10，±1天→70/±3天→50/±7天→30），避免月底课程被局部递增奖励持续挤压成连排。少课（<4门）沿用 v5.47 区间等分锚点并升级为就近选取「覆盖晚间」的可行时段槽；v5.41 子表整体分散语义保留（合班课与所在子表前面普通课共享同一套锚点序列）。v5.52 起排课报告新增「各子表分散排课策略详情与评分 + 模拟日历表」章节：逐策略展示评分明细（均匀度/覆盖范围/中段覆盖/起始留白/终止留白/间隔匹配）与模拟槽位序列，并对选中方案生成模拟日历表。v5.64 起分散基础分改为「Z 规则」三项核心评分：以排课前最终版师资-课程空闲时间表区间 [X1, X2] 与未定时间课程数 Y 计算理想节奏 Z = round((X2-X1-1-Y)/Y)；三项偏差（起始留白 (W1-X1-1)-Z/2、终止留白 (X2-W2-1)-Z/2、相邻间隔 W3-Z）各按线性衰减 100×max(0, 1−0.1·|D|) 评分（v5.66；v5.64 曾为高斯 100×e^(-0.1·D²)，对远偏差惩罚过陡），偏差 0 分最高、偏差越大分越低；同名替换旧「最小间隔/平衡性/大小间隔惩罚/端距留白」维度（平衡性并入间隔项），保留均匀度/覆盖范围/中段覆盖。**v6.0「模拟即结果」**：选中策略的槽位序列不再仅作为锚点偏好，而是先整表重放校验（区间/班级递增/合班上界/师资空闲/冲突），通过后逐课直接落账为最终排课结果；上述锚点近邻回退（±1/±3/±7 天）仅在校验失败降级兜底时生效。'],
+  ['兜底补排', () => '每门课先按师资-班级空闲时间表 + Z 规则分散方案锚点/时段偏好正常排课（间隔统一 MIN_GAP=10 分钟，晚间偏好由时间分数权重承载；v5.10 六级「仅晚上/所有空闲 × 10/5/0 分钟间隔」回退仅第一级实际触发，2-6 级从未生效已移除；v5.65 移除 v5.10 槽位级间隔天数分散度奖励 calculateDispersionBonus——实测选中槽位 100% 为锚点全等锁定且去掉该奖励后胜者 0 次变化，分散语义由 v5.64 Z 规则方案评分唯一承载）；失败后第二阶段用原始空闲时间兜底补排，冲突由 hasConflict 兜底检测。**v6.0**：兜底仅在「13 策略模拟全部无解」或「模拟方案整表重放校验不通过」时启用，逐课改用 scheduleCourse 求解；校验通过时模拟槽位即为最终排课结果，不再二次求解。**v6.0.4 同天兜底（第三阶段）**：第一、二阶段（已穷尽全部「不同天」候选）均失败后，放宽「同一师资 + 同一班级每天至多一节」整日硬约束再试一次（allowSameDay=true），使同一天的不同时段可再排一节；该阶段师资同天间隔提高到 Y=' + AVAIL_REMOVE_PAD_TEACHER + ' 分钟、班级间隔仍为 ' + CLASS_MIN_GAP + ' 分钟。因第三阶段排在第二阶段（在更松约束下已穷尽全部「不同天」候选）之后，相对它仅多开「日封锁」一个维度，故只会贡献「同天」槽位——天然保证「优先不同天、排不下才同天」，不会抢走本可排在不同天的日期。'],
 ];
 
 /**
@@ -98,6 +101,11 @@ export function buildScheduleReportMarkdown(meta, result) {
   lines.push(`# ${title}`);
   lines.push('');
   lines.push(`> 生成时间：${meta.reportAt}　应用版本：${meta.appVersion}`);
+  lines.push('');
+  // v6.0：排课模式（simulation-first = 13 策略模拟选优后直接落账 / legacy = 模拟仅作锚点偏好）
+  lines.push(`排课模式：**${diag.scheduleMode === 'legacy'
+    ? 'legacy（模拟方案仅作锚点偏好，逐课排课）'
+    : 'simulation-first（13 策略模拟选优，校验通过后直接落账）'}**`);
   lines.push('');
   lines.push(`课程总数：**${result.successCount}**　成功：**${result.successCount}**　失败：**${result.failedCount}**`);
   lines.push('');
@@ -155,7 +163,7 @@ export function buildScheduleReportMarkdown(meta, result) {
   // 「未收录科目」之前；未在科目师资表中的师资按「未收录科目」处理，排在所有已收录科目之后。
   lines.push(`## ${CN[2]}、科目师资表`);
   lines.push('');
-  lines.push('> **科目优先级**（v5.25 科目师资表，v5.92 新增「408计算机」）：' +
+  lines.push('> **科目优先级**（v5.25 科目师资表，v5.92 新增「408计算机」，v5.95 新增「日语」）：' +
     `**${SUBJECT_PRIORITY.join(' > ')} > 未收录科目**。排课时先按科目确立大体师资顺序（整科目排完再进下一科目），` +
     '科目内再按师资难易程度降序排课（见下一章）。未在科目师资表中的师资按「未收录科目」处理，排在所有已收录科目之后。');
   lines.push('');
@@ -211,6 +219,26 @@ export function buildScheduleReportMarkdown(meta, result) {
   lines.push('- **排课顺序语义**：408计算机 课程整体排在英语、政治、数学之后统一排课，科目内按师资难易程度降序排课；' +
     '其班级/师资占用与其它科目共享同一套「师资-班级空闲时间表」约束。');
   lines.push('');
+
+  // 日语 科目专项说明（v5.95 新增）
+  const japaneseRoster = SUBJECT_TEACHERS['日语'] || [];
+  const japaneseInvolved = teacherOrder.filter(r => r.subject === '日语');
+  lines.push('**「日语」科目说明（v5.95 新增）：**');
+  lines.push('');
+  lines.push(`- **科目定位**：日语相关课程的专属科目，在科目优先级中固定排在 **408计算机之后、未收录科目之前**（第 ${SUBJECT_PRIORITY.indexOf('日语') + 1} 优先级）。`);
+  lines.push(`- **师资名单**（共 ${japaneseRoster.length} 位）：${japaneseRoster.map(mdCell).join('、')}。`);
+  if (japaneseInvolved.length > 0) {
+    lines.push(`- **本报告涉及**：${japaneseInvolved.length} 位 日语 师资参与排课 —— ` +
+      japaneseInvolved.map(r => `${mdCell(r.teacher)}（理论第 ${r.order} 位，需求 ${r.courseMinutes} 分钟，排课 ${teacherCourseCount[r.teacher] || 0} 门）`).join('；') + '。');
+  } else {
+    lines.push('- **本报告涉及**：本报告未涉及 日语 科目课程（该科目师资不参与本次排课）。');
+  }
+  lines.push('- **互斥规则（部分互斥）**：同一班级中，日语仅与 **日语 / 政治 / 数学** 时间互斥，' +
+    '与 **英语、408计算机** 可在同一时间段并存；日语课之间（同班）仍互斥。已排课表（v5.99）按**授课师资名称**归类科目后参与同一互斥矩阵（与课程体系表同一份师资名单），归类为英语/408计算机的已排课不阻挡日语；师资不在名单中时保守按全互斥处理。');
+  lines.push('- **空闲时间表扣除口径（v5.96 / v5.99）**：生成日语师资的「师资-班级空闲时间表」时，仅扣除同班 **政治 / 数学** 课节时间，' +
+    '以及该师资自身的已排课节时间；同班 **英语、408计算机、日语（其他师资）** 课节不扣除。' +
+    '已排课表（v5.99）归类为政治/数学/日语时扣除，归类为英语/408计算机时不扣除，师资不在名单中时保守扣除。');
+  lines.push('');
   lines.push('---');
   lines.push('');
 
@@ -248,12 +276,29 @@ export function buildScheduleReportMarkdown(meta, result) {
   lines.push('');
   lines.push('> 子表按「师资排课顺序 → 同师资时间密度 L = M/N 升序」排序（v5.88）：N = 子表课程数，M = 子表内「起始日期」「终止日期」均非空行的最晚终止日期 − 最早起始日期 + 1 天（含首尾），L 越小越先排；无齐备日期行则 L = ∞ 排最后。');
   lines.push('');
-  lines.push('| 子表 | 课程数N | 天数M | 时间密度L | 成功 | 对齐 | 失败 | 涉及师资 |');
-  lines.push('|---|--:|--:|--:|--:|--:|--:|---|');
+  lines.push('| 子表 | 课程数N | 天数M | 时间密度L | 成功 | 对齐 | 失败 | 模拟方案校验 | 涉及师资 |');
+  lines.push('|---|--:|--:|--:|--:|--:|--:|---|---|');
   for (const s of diag.sheetStats || []) {
-    lines.push(`| ${mdCell(s.sheetName)} | ${s.totalCourses} | ${s.m ?? '—'} | ${fmtL(s.l)} | ${s.scheduled} | ${s.aligned} | ${s.failed} | ${s.teachers.map(mdCell).join('、')} |`);
+    lines.push(`| ${mdCell(s.sheetName)} | ${s.totalCourses} | ${s.m ?? '—'} | ${fmtL(s.l)} | ${s.scheduled} | ${s.aligned} | ${s.failed} | ${formatPlanValidation(s.planValidation)} | ${s.teachers.map(mdCell).join('、')} |`);
   }
   lines.push('');
+
+  // v6.0.4：同天兜底标注 —— 第一、二阶段（不同天候选）均失败后，放宽「同一师资+同一班级每天至多一节」
+  // 整日硬约束落入与当日其它课程「不同时段」的同一天的课程（phase = 'fallback-same-day'）。
+  const sameDaySteps = steps.filter(s => s.phase === 'fallback-same-day' && s.slot);
+  if (sameDaySteps.length > 0) {
+    lines.push(`> ⚠ **同天兜底（v6.0.4）**：以下 **${sameDaySteps.length}** 门课程在常规约束（同一师资 + 同一班级每天至多一节，须排在不同天）下无可行的「不同天」日期，经放宽该整日约束后落在与当日已有课程**不同时段**的同一天（师资同天间隔仍满足 Y=${AVAIL_REMOVE_PAD_TEACHER} 分钟、班级间隔仍满足 ${CLASS_MIN_GAP} 分钟）：`);
+    lines.push('');
+    lines.push('| 子表 | 行序 | 课程 | 班级 | 师资 | 兜底日期 时段 |');
+    lines.push('|---|--:|---|---|---|---|');
+    for (const s of sameDaySteps) {
+      lines.push(`| ${mdCell(s.sheetName)} | ${s.orderInSheet} | ${mdCell(s.courseName)} | ${mdCell(s.classType)} | ${mdCell(s.teacher)} | ${s.slot.date} ${s.slot.startTime}-${s.slot.endTime} |`);
+    }
+    lines.push('');
+  } else {
+    lines.push(`> **同天兜底（v6.0.4）**：本次排课未触发同天兜底（全部课程均在满足「同一师资 + 同一班级每天至多一节」的基础上排入不同日期）。`);
+    lines.push('');
+  }
 
   // 各子表最终排课分散策略：每门课程按行序对应的「最终排课日期」，
   // 取自排课轨迹 steps 的实际时间槽（与「六、逐课排课明细」一致）；
@@ -295,19 +340,43 @@ export function buildScheduleReportMarkdown(meta, result) {
     };
     lines.push(`## ${CN[5]}、各子表分散排课策略详情与评分`);
     lines.push('');
-    lines.push('> 每行说明：总分 = 分散基础分（均匀度 + 覆盖范围 + 中段覆盖 + 起始留白 + 终止留白 + 间隔匹配）**+ 时间优先级（槽位时间优先级分均值，v5.67）**；v5.64 起按理想节奏 Z = round((X2-X1-1-Y)/Y) 评分（X1/X2 = 排课前最终版师资-课程空闲时间表区间、Y = 未定时间课程数），起始/终止留白理想值各 = Z/2、相邻间隔理想值 = Z，偏差 0 分最高、偏差越大分越低（v5.66 起线性衰减）；**★** 为该子表选中策略。各子表选中方案对应的**模拟日历表**见下一章（六）。');
+    lines.push('> 每行说明：总分 = 分散基础分（均匀度 + 覆盖范围 + 中段覆盖 + 起始留白 + 终止留白 + 间隔匹配）**+ 时间优先级（槽位时间优先级分均值，v5.67）**；v5.64 起按理想节奏 Z = round((X2-X1-1-Y)/Y) 评分（X1/X2 = 排课前最终版师资-课程空闲时间表区间、Y = 未定时间课程数），起始/终止留白理想值各 = Z/2、相邻间隔理想值 = Z，偏差 0 分最高、偏差越大分越低（v5.66 起线性衰减）；**★** 为该子表选中策略。v6.0 起选中策略即最终排课结果：整表重放校验通过后逐课直接落账，「落账来源」列给出模拟直接落账 / 逐课兜底的课程门数。各子表选中方案对应的**模拟日历表**见下一章（六）。');
     lines.push('');
+
+    // v6.0：各子表逐课落账来源统计（simulation = 模拟方案直接落账 / fallback = 逐课兜底 / aligned = 合班对齐）
+    const slotSourceBySheet = new Map();
+    for (const st of steps) {
+      if (!slotSourceBySheet.has(st.sheetName)) {
+        slotSourceBySheet.set(st.sheetName, { simulation: 0, fallback: 0, aligned: 0, sameDay: 0 });
+      }
+      const rec = slotSourceBySheet.get(st.sheetName);
+      if (st.slotSource === 'simulation') rec.simulation++;
+      else if (st.slotSource === 'fallback') rec.fallback++;
+      else if (st.slotSource === 'aligned') rec.aligned++;
+      // v6.0.4：同天兜底门数（phase = 'fallback-same-day'，落账来源仍属兜底）
+      if (st.phase === 'fallback-same-day') rec.sameDay++;
+    }
+    const slotSourceLabel = (sheetName) => {
+      const rec = slotSourceBySheet.get(sheetName);
+      if (!rec) return '—';
+      const parts = [];
+      if (rec.simulation > 0) parts.push(`模拟 ${rec.simulation}`);
+      if (rec.fallback > 0) parts.push(`兜底 ${rec.fallback}`);
+      if (rec.aligned > 0) parts.push(`对齐 ${rec.aligned}`);
+      if (rec.sameDay > 0) parts.push(`同天兜底 ${rec.sameDay}`);
+      return parts.join(' / ') || '—';
+    };
 
     // （1）选中策略概览
     lines.push('**（1）各子表选中策略概览：**');
     lines.push('');
-    lines.push('| 子表 | 课程数 | 选中策略 | 总分 | 分散基础分 | 时间优先级 | 模拟槽位序列 |');
-    lines.push('|---|---|:--|--:|--:|--:|---|');
+    lines.push('| 子表 | 课程数 | 选中策略 | 总分 | 分散基础分 | 时间优先级 | 方案校验 | 落账来源 | 模拟槽位序列 |');
+    lines.push('|---|---|:--|--:|--:|--:|---|---|---|');
     for (const s of sheetsWithPlan) {
       const p = s.dispersionPlan;
       const selected = p.candidates.find(c => c.strategy === p.selectedStrategy) || p.candidates[0];
       if (!selected) continue;
-      lines.push(`| ${mdCell(s.sheetName)} | ${courseCountLabel(p, s)} | **${mdCell(selected.strategy || '—')}** | ${fmtScore(selected.score)} | ${fmtScore(selected.baseScore)} | ${fmtScore(selected.timeScoreAvg)} | ${formatSlots(selected.slots)} |`);
+      lines.push(`| ${mdCell(s.sheetName)} | ${courseCountLabel(p, s)} | **${mdCell(selected.strategy || '—')}** | ${fmtScore(selected.score)} | ${fmtScore(selected.baseScore)} | ${fmtScore(selected.timeScoreAvg)} | ${formatPlanValidation(s.planValidation)} | ${slotSourceLabel(s.sheetName)} | ${formatSlots(selected.slots)} |`);
     }
     lines.push('');
 
@@ -401,8 +470,9 @@ export function buildScheduleReportMarkdown(meta, result) {
     lines.push('');
     lines.push(`> 每子表展示**第一门实际排课（非对齐）课程**在排课瞬间的「师资-班级空闲时间表」快照（v5.57）。` +
       `该表 = 该师资当月空闲时间 − **班级已占时段**（该课涉及班级的已排课程，左右各加 X=${AVAIL_REMOVE_PAD} 分钟缓冲）− ` +
-      `**该师资自身已排时段**（同一时刻师资只能上一门课，左右各加独立的 Y=${AVAIL_REMOVE_PAD_TEACHER} 分钟缓冲；同一课程若同时命中班级与师资两类，取 max(X, Y)）。因子表内严格按行序整表顺序排课，排第一课时本子表尚无课程被占用，` +
-      `故该表中所减时段全部来自**此前已排课的子表**，具体来源见各子表「已减去来源子表课程」。` +
+      `**该师资自身已排时段**（同一时刻师资只能上一门课，左右各加独立的 Y=${AVAIL_REMOVE_PAD_TEACHER} 分钟缓冲；同一课程若同时命中班级与师资两类，取 max(X, Y)）− ` +
+      `**已排课表（preset）占用**（v5.99：已排课表按**授课师资名称**归类科目后参与扣除——班级有交集且与本科目互斥时按 X 缓冲扣除，师资相同按 Y 缓冲扣除；师资不在名单中时保守全扣）。因子表内严格按行序整表顺序排课，排第一课时本子表尚无课程被占用，` +
+      `故该表中所减时段来自**此前已排课的子表**与**已排课表**，具体来源见各子表「已减去来源子表课程」「已减去已排课表占用」。` +
       (anyCutAfter ? ` **若子表含有「排课前已确定日期」的合班课（日期由先前子表确定），先分后合侧按「合班课之后截断」（v5.59/v5.68）删除第一个合班课开始时间 − ${AVAIL_REMOVE_PAD} 分钟缓冲之后的所有空闲时间；**` : '') +
       (anyCutBefore ? ` **先合后分侧按「合班课之前截断」（v5.83）删除行序最后一个已定日期合班课结束时间 + ${AVAIL_REMOVE_PAD} 分钟缓冲之前的所有空闲时间，使普通课收缩到最后合班课之后排课。本子表首次确定合班课日期的子表，排课瞬间合班课尚未确定，快照不截断。**` : ''));
     lines.push('');
@@ -469,14 +539,35 @@ export function buildScheduleReportMarkdown(meta, result) {
           '两子表即使**没有公共班级**、只要**共用同一位师资**，其已排时段同样被扣减，防止同一老师同一时段上两门课；' +
           `该维度左右各加独立的 Y=${AVAIL_REMOVE_PAD_TEACHER} 分钟缓冲）` +
           `＋ **班级占用**（组成班级有交集，左右各加 X=${AVAIL_REMOVE_PAD} 分钟缓冲）＋ **尾段预留**（v5.49 为合班课腾尾段：合班课其他班级在尾段日期内的已排时间）。` +
-          '同一课程若同时命中师资占用与班级占用，两段区间合并取并集，等效于取 max(X, Y)。');
+          '同一课程若同时命中师资占用与班级占用，两段区间合并取并集，等效于取 max(X, Y)。' +
+          '（v5.97）班级占用 / 尾段预留 / 头段预留三个维度均按师资-班级空闲表的科目扣除口径过滤：' +
+          '日语师资仅计入同班 **政治 / 数学** 课节，同班英语、408计算机、日语（其他师资）不计入扣除来源。');
       } else {
         // v5.60：excluded 已过滤为「实际参与扣除的来源课程」；为空时可能是本子表
         // 是第一个排课的子表，也可能是此前子表无与该子表同师资/同班级的课程
         const isFirstSheet = fl === firstLessons[0];
+        const hasPreset = (fl.presetExcluded || []).length > 0;
         lines.push(isFirstSheet
-          ? '**已减去来源子表课程：**（无 — 本子表是第一个排课的子表，空闲表仅含该师资原始空闲时间）'
+          ? `**已减去来源子表课程：**（无 — 本子表是第一个排课的子表，空闲表仅含该师资原始空闲时间${hasPreset ? '；已排课表占用另见下方「已减去已排课表占用」' : ''}）`
           : '**已减去来源子表课程：**（无 — 此前已排子表中没有与本子表第一课同师资/同班级的课程，且无尾段预留扣除）');
+      }
+      // v5.99：已排课表（preset）占用扣除明细——preset 识别科目后按硬互斥口径参与扣除
+      const presetExcl = fl.presetExcluded || [];
+      if (presetExcl.length > 0) {
+        lines.push('');
+        lines.push(`**已减去已排课表占用（共 ${presetExcl.length} 条，v5.99）：**`);
+        lines.push('');
+        lines.push('| # | 班级 | 课节名称 | 师资 | 识别科目 | 日期 时段 | 维度 |');
+        lines.push('|--:|---|---|---|---|---|---|');
+        presetExcl.forEach((p, i) => {
+          const dimNames = (p.dims || []).map(d => PRESET_DIM_LABEL[d]).filter(Boolean).join('/');
+          lines.push(`| ${i + 1} | ${mdCell(p.classType)} | ${mdCell(p.courseName)} | ${mdCell(p.teacher)} | ${mdCell(p.subject || '未识别')} | ${String(p.date).slice(5)} ${p.startTime}-${p.endTime} | ${dimNames} |`);
+        });
+        lines.push('');
+        lines.push(`> 已排课表条目无科目列（v5.99）：按**授课师资名称**归类科目（与课程体系表同一份师资名单，如唐静 → 英语），` +
+          `并按**硬互斥口径**（isSubjectConflict）从空闲表扣除——**班级占用**（组成班级有交集且与本科目互斥，左右各加 X=${AVAIL_REMOVE_PAD} 分钟缓冲）、` +
+          `**师资占用**（与第一课师资相同，左右各加 Y=${AVAIL_REMOVE_PAD_TEACHER} 分钟缓冲）。` +
+          `归类为英语/408计算机的已排课不阻挡日语，不会出现在日语师资的扣除来源中；师资不在名单中的条目仍按全互斥保守扣除。`);
       }
       lines.push('');
     }
@@ -519,12 +610,15 @@ export function buildScheduleReportMarkdown(meta, result) {
       `与课程体系表科目隔离。排课前全部条目**预注册**——` +
       `**班级维度**（始终）：下列班级在对应日期、时段内已排课程，本排课自动避让（同一班级同一时间段只能上一门课）；` +
       `**师资维度**（v5.91，师资列非空）：该师资已于对应时段排课，本排课按前后各 **Y=${AVAIL_REMOVE_PAD_TEACHER}** 分钟缓冲避让` +
-      `（同一师资同一时间段不能上两门课）。`);
+      `（同一师资同一时间段不能上两门课）。` +
+      `v5.99 起条目科目按**授课师资名称**归类（与课程体系表同一份师资名单，如唐静 → 英语），班级维度改按**硬互斥口径**参与扣除：` +
+      `归类为英语/408计算机的条目不阻挡日语；师资不在名单中的条目仍按全互斥保守扣除。`);
     lines.push('');
-    lines.push('| # | 班级 | 课节名称 | 师资 | 授课日期 | 授课时间 |');
-    lines.push('|---:|---|---|---|---|---|');
+    lines.push('| # | 班级 | 课节名称 | 师资 | 识别科目 | 授课日期 | 授课时间 |');
+    lines.push('|---:|---|---|---|---|---|---|');
     for (const p of presetStats) {
-      lines.push(`| ${p.order} | ${mdCell(p.classType)} | ${mdCell(p.courseName)} | ${mdCell(p.teacher)} | ${mdCell(p.date)} | ${mdCell(p.startTime)}-${mdCell(p.endTime)} |`);
+      const subject = inferPresetSubject(p);
+      lines.push(`| ${p.order} | ${mdCell(p.classType)} | ${mdCell(p.courseName)} | ${mdCell(p.teacher)} | ${mdCell(subject || '未识别')} | ${mdCell(p.date)} | ${mdCell(p.startTime)}-${mdCell(p.endTime)} |`);
     }
     lines.push('');
     lines.push('---');
@@ -551,6 +645,14 @@ function fmtL(v) {
   if (v === null || v === undefined || v === Infinity || v === -Infinity) return '∞';
   if (Number.isNaN(v)) return '—';
   return String(Math.round(Number(v) * 100) / 100);
+}
+
+/** v6.0：模拟方案校验结果格式化（verified → 直接落账；否则列出降级原因） */
+function formatPlanValidation(pv) {
+  if (!pv) return '—';
+  if (pv.verified) return '通过（直接落账）';
+  const reason = pv.reason ? mdCell(pv.reason) : '未知原因';
+  return `兜底（${reason}）`;
 }
 
 /** 模拟槽位序列格式化：优先 slots（含时段），slots 缺失时退回 dates；'MM-DD HH:MM-HH:MM' 或仅 'MM-DD' */
