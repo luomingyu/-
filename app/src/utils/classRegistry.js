@@ -30,6 +30,14 @@
 //      "28OMO所有班" → 28 同上（28OMO1~4期，4 个；未上架的 28OMO5期 不计入）合班；同样在 classifyClassType 整行级处理
 //   5. 命中 0 个或多个候选（歧义，如 "27全程" 无法区分期数）→ 未归类，
 //      由调用方「警告保留原值」继续排课
+//
+// v6.0.8 逆向缩写：abbreviateClassType 把「包含某组全部标准班」的已归类班型串
+//   缩写回批量简称（"27线上所有班" / "28线上所有班" / "27OMO所有班" / "28OMO所有班"），
+//   仅供界面与导出展示（日历/列表/图片/Excel/飞书表格/排课报告），不影响排课口径。
+// v6.0.10 期数区间缩写改造为通用规律（abbreviatePeriodRuns，替代逐个硬编码）：
+//   同一「年份 + 系列（早鸟/全程/智学/OMO）」的极大连续期数段（长度 ≥ 2）合并为「年份+系列+起-止期」——
+//   "28早鸟1~4期" → "28早鸟1-4期"、"28早鸟1~5期" → "28早鸟1-5期"、"28全程1期,28全程2期" → "28全程1-2期"。
+//   正向展开沿用既有 expandClassRange，故缩写与展开仍严格互逆。
 import { splitClassTypes } from './classType.js';
 
 /**
@@ -208,6 +216,110 @@ function expandOmoAll(raw) {
   const m = normalizeForCompare(raw).match(/^(2[78])omo(?:所有|全部)班$/);
   if (!m) return null;
   return queryClasses({ year: m[1], type: 'OMO', launched: true });
+}
+
+/**
+ * 批量简称分组（v6.0.8 反向缩写用）：仅覆盖「整组所有班」类简称——year / type
+ * （口径 = 年份 + 类型 + 已上架），与 expandOnlineAll / expandOmoAll 同源，随班级清单增减自动生效。
+ * 顺序即匹配优先级：范围更大的组排在前面（如「28线上所有班」含早鸟 1~5 期与全程 1~3 期），
+ * 命中后其成员已并入简称，后续范围更小的组自然不再命中。
+ * 期数区间类简称（如 "28早鸟1-4期"）不在此列，由 abbreviatePeriodRuns 按通用规律生成。
+ */
+const CLASS_GROUPS = [
+  { label: '27线上所有班', year: '27', type: '线上' },
+  { label: '28线上所有班', year: '28', type: '线上' },
+  { label: '27OMO所有班', year: '27', type: 'OMO' },
+  { label: '28OMO所有班', year: '28', type: 'OMO' }
+];
+
+/**
+ * 期数区间通用缩写（v6.0.10）：把展示串里同一「年份 + 带期数系列（早鸟/全程/智学/OMO）」的
+ * **极大连续期数段（长度 ≥ 2）** 合并为「年份+系列+起期-止期」简称——
+ *   "28早鸟1期,28早鸟2期,28早鸟3期,28早鸟4期" → "28早鸟1-4期"；
+ *   含 5 期时 → "28早鸟1-5期"；"28全程1期,28全程2期" → "28全程1-2期"。
+ * 与正向展开 expandClassRange 严格互逆；单期或不足连续两期的系列保持原样。
+ * 简称插在该段首个成员的原位置，其余班级原样保留、顺序不变。
+ * @param {string[]} display 班级名数组（已由属性组替换后的展示串）
+ * @returns {{ display: string[], changed: boolean }} 缩写后的数组与是否发生变化
+ */
+function abbreviatePeriodRuns(display) {
+  // 按 (年份, 系列) 归组，只收带期数的标准班写法
+  const byGroup = new Map();
+  for (const name of display) {
+    const year = parseYear(name);
+    const series = parseSeries(name);
+    const period = parsePeriod(name);
+    if (!year || !series || !period) continue;
+    const key = `${year}${series}`;
+    if (!byGroup.has(key)) byGroup.set(key, { year, series, items: [] });
+    byGroup.get(key).items.push({ name, period: Number(period) });
+  }
+
+  // 每组内按期数升序找极大连续段，长度 ≥ 2 的段标记简称
+  const labelByMember = new Map();
+  for (const { year, series, items } of byGroup.values()) {
+    const sorted = [...items].sort((a, b) => a.period - b.period);
+    let i = 0;
+    while (i < sorted.length) {
+      let j = i;
+      while (j + 1 < sorted.length && sorted[j + 1].period === sorted[j].period + 1) j++;
+      if (j > i) {
+        const label = `${year}${series}${sorted[i].period}-${sorted[j].period}期`;
+        for (let k = i; k <= j; k++) labelByMember.set(sorted[k].name, label);
+      }
+      i = j + 1;
+    }
+  }
+  if (labelByMember.size === 0) return { display, changed: false };
+
+  const out = [];
+  const emitted = new Set();
+  for (const name of display) {
+    const label = labelByMember.get(name);
+    if (!label) { out.push(name); continue; }
+    if (emitted.has(label)) continue; // 同段其余成员已由首个成员位置输出简称
+    emitted.add(label);
+    out.push(label);
+  }
+  return { display: out, changed: true };
+}
+
+/**
+ * 班型串反向缩写（v6.0.8，与 classifyClassType 的展开严格互逆；v6.0.10 增加通用期数区间规则）：
+ * 已归类班型串中**包含某组全部标准班**时，把这些标准班替换为该组批量简称
+ * （如 27 个线上班全在 → "27线上所有班"）；随后对剩余项按 abbreviatePeriodRuns 规律合并
+ * 同系列连续期数（如 28早鸟1~4期全在 → "28早鸟1-4期"）。触发口径为「包含即缩写」，
+ * 其余班级原样保留、顺序不变（如 "27线上所有班,27OMO1期"）。可同时命中多组。
+ * 未命中任何组时原样返回（不对分隔符做任何规范化）。
+ * @param {string} classType 已归类班型串（如 "27早鸟,27早鸟暑期,..."）
+ * @returns {string} 缩写后的班型串；入参为空/未命中时返回原值
+ */
+export function abbreviateClassType(classType) {
+  const classes = splitClassTypes(classType);
+  if (classes.length === 0) return classType;
+
+  let display = classes;
+  let changed = false;
+  // 1) 「整组所有班」类简称优先（范围更大），命中后其成员并入简称
+  for (const group of CLASS_GROUPS) {
+    const members = queryClasses({ year: group.year, type: group.type, launched: true }) || [];
+    if (members.length === 0) continue;
+    if (!members.every(name => display.includes(name))) continue;
+    // 缩写串插到该组首个成员的原位置（先剔除该组全部成员，再按原位置插入）
+    const insertAt = display.slice(0, display.findIndex(name => members.includes(name)))
+      .filter(name => !members.includes(name)).length;
+    const rest = display.filter(name => !members.includes(name));
+    rest.splice(insertAt, 0, group.label);
+    display = rest;
+    changed = true;
+  }
+  // 2) 期数区间通用缩写：对剩余的同系列连续期数做区间合并
+  const runs = abbreviatePeriodRuns(display);
+  if (runs.changed) {
+    display = runs.display;
+    changed = true;
+  }
+  return changed ? display.join(',') : classType;
 }
 
 /**

@@ -1,15 +1,16 @@
 // 飞书在线表格导出：把当前月历（含已排课程/预设课程）按日历形式输出到飞书表格
 // 布局：7 列星期表头；每月按周分块，每块高度=当周单日最多课程数（至少 1 行）；
 // 每列每天第一格是日期，其后每格是一节课（班级名称/课节名称/授课师资/授课时间）
-import { MONTHS, WEEKDAYS } from '../config/constants.js';
+import { MONTHS, WEEKDAYS, WEEKDAYS_MON_FIRST } from '../config/constants.js';
 import { formatDate } from './dateUtils.js';
 import { getMonthDayData } from '../render/calendar.js';
 import { getCoursesForDate, getPresetForDate } from '../state/selectors.js';
+import { abbreviateClassType } from './classRegistry.js';
 
 /**
  * 生成飞书在线表格并返回表格链接
  * @param {object} state 当前应用状态（决定月份与筛选条件）
- * @returns {Promise<string>} 飞书表格 URL
+ * @returns {Promise<{url: string, permission: {ok: boolean, error: string}|null}>} 表格链接与权限设置结果
  */
 export async function exportCalendarToFeishu(state) {
   const payload = buildFeishuPayload(state);
@@ -28,7 +29,7 @@ export async function exportCalendarToFeishu(state) {
       throw new Error(data.error || `服务返回错误（HTTP ${resp.status}）`);
     }
     if (!data.url) throw new Error('飞书未返回表格链接');
-    return data.url;
+    return { url: data.url, permission: data.permission || null };
   } catch (error) {
     if (error.name === 'AbortError') throw new Error('生成超时（超过 2 分钟），请检查本机服务与飞书凭证后重试');
     throw error;
@@ -99,7 +100,14 @@ export function showFeishuNotice(kind, text, url) {
 function buildFeishuPayload(state) {
   const year = state.currentDate.getFullYear();
   const month = state.currentDate.getMonth();
-  const suffix = [state.selectedClass, state.selectedTeacher].filter(Boolean).join(' · ');
+  const classLabel = (state.selectedClasses && state.selectedClasses.length)
+    ? state.selectedClasses.join('、') : '全部班级';
+  const teacherLabel = (state.selectedTeachers && state.selectedTeachers.length)
+    ? state.selectedTeachers.join('、') : '全部师资';
+  const suffix = [
+    ...(state.selectedClasses || []),
+    ...(state.selectedTeachers || [])
+  ].join(' · ');
 
   const days = getMonthDayData(year, month);
   const weeks = [];
@@ -115,8 +123,8 @@ function buildFeishuPayload(state) {
 
   return {
     title: `${year}年${MONTHS[month]} 课表${suffix ? ` · ${suffix}` : ''}`,
-    subtitle: `班级：${state.selectedClass || '全部班级'} ｜ 师资：${state.selectedTeacher || '全部师资'}`,
-    weekdays: WEEKDAYS.map(w => `周${w}`),
+    subtitle: `班级：${classLabel} ｜ 师资：${teacherLabel}`,
+    weekdays: WEEKDAYS_MON_FIRST.map(w => `周${w}`),
     weeks
   };
 }
@@ -136,7 +144,7 @@ function buildDayCourses(state, date) {
   ].sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)));
 
   return timeline.map(course => ({
-    className: course.classType || '',
+    className: state.abbreviateClass ? abbreviateClassType(course.classType || '') : (course.classType || ''),
     lessonName: course.name || '',
     teacher: course.teacher || '',
     time: `${course.startTime || ''}-${course.endTime || ''}`

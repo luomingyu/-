@@ -11,12 +11,13 @@
     <header class="top-bar">
       <div class="top-bar__title-group">
         <h1 class="app-title">📅 月度排课系统</h1>
-        <span class="algorithm-badge" id="algorithmVersionBadge" title="排课算法版本"></span>
-        <span class="app-version-badge" id="appVersionBadge" title="应用版本（与开发文档版本历史同步）"></span>
+        <span class="app-version-badge" id="appVersionBadge" title="应用版本号（与构建产物一致）"></span>
         <a class="usage-link" href="https://gaotuedu.feishu.cn/docx/XiCsdiLDnoM6uoxIaNGcg8Lankf" target="_blank" rel="noopener noreferrer" title="打开月度排课系统使用说明（飞书文档）">月度排课系统使用说明 ↗</a>
       </div>
+      <!-- 右侧操作区：两行三列（按列填充）
+           第 1 列：排课 / 查看；第 2 列：空闲开关 / 班级缩写开关；第 3 列：生成图片 / 生成飞书表格 -->
       <div class="top-bar__actions">
-        <!-- 排课部分：智能排课 + 排课年、月 -->
+        <!-- 第 1 列上：排课部分（智能排课 + 排课年、月） -->
         <div class="action-group">
           <span class="action-group__label">排课</span>
           <div class="month-selector">
@@ -27,29 +28,54 @@
             <span>📅</span><span>智能排课</span>
           </button>
         </div>
-        <!-- 查看部分：班级查看 + 师资查看 -->
+        <!-- 第 1 列下：查看部分（班级查看 + 师资查看，均支持多选；v6.0.13） -->
         <div class="action-group">
           <span class="action-group__label">查看</span>
-          <div class="class-filter">
-            <select id="classFilter" class="month-selector__select" title="选择班级筛选课表">
-              <option value="">全部班级</option>
-            </select>
+          <div class="multi-select" id="classFilterWrap">
+            <button type="button" class="multi-select__trigger" id="classFilterTrigger"
+                    aria-haspopup="true" aria-expanded="false" title="选择班级筛选课表（可多选，不选=全部）">
+              <span class="multi-select__label" id="classFilterLabel">全部班级</span>
+              <span class="multi-select__caret" aria-hidden="true">▾</span>
+            </button>
+            <div class="multi-select__panel" id="classFilterPanel" hidden>
+              <div class="multi-select__panel-head">
+                <span class="multi-select__panel-title">班级</span>
+                <button type="button" class="multi-select__clear" id="classFilterClear">清空</button>
+              </div>
+              <div class="multi-select__options" id="classFilterOptions"></div>
+            </div>
           </div>
-          <div class="teacher-filter">
-            <select id="teacherFilter" class="month-selector__select" title="选择师资筛选空闲时间与课表">
-              <option value="">全部师资</option>
-            </select>
+          <div class="multi-select" id="teacherFilterWrap">
+            <button type="button" class="multi-select__trigger" id="teacherFilterTrigger"
+                    aria-haspopup="true" aria-expanded="false" title="选择师资筛选空闲时间与课表（可多选，不选=全部）">
+              <span class="multi-select__label" id="teacherFilterLabel">全部师资</span>
+              <span class="multi-select__caret" aria-hidden="true">▾</span>
+            </button>
+            <div class="multi-select__panel" id="teacherFilterPanel" hidden>
+              <div class="multi-select__panel-head">
+                <span class="multi-select__panel-title">师资</span>
+                <button type="button" class="multi-select__clear" id="teacherFilterClear">清空</button>
+              </div>
+              <div class="multi-select__options" id="teacherFilterOptions"></div>
+            </div>
           </div>
-          <button class="availability-toggle-btn" id="availabilityToggleBtn" type="button" title="点击切换日历是否显示空闲时间（默认显示）">
-            <span>⏱</span><span id="availabilityToggleLabel">空闲开</span>
-          </button>
-          <button class="image-export-btn" id="exportImageBtn" type="button" title="将当前日历课表生成 PNG 图片（按当前班级/师资筛选）">
-            <span>🖼</span><span>生成图片</span>
-          </button>
-          <button class="image-export-btn" id="exportFeishuBtn" type="button" title="将当前日历课表生成飞书在线表格（按当前班级/师资筛选）">
-            <span>📊</span><span>生成飞书表格</span>
-          </button>
         </div>
+        <!-- 第 2 列上：空闲开关 -->
+        <button class="availability-toggle-btn" id="availabilityToggleBtn" type="button" title="点击切换日历是否显示空闲时间（默认隐藏）">
+          <span>⏱</span><span id="availabilityToggleLabel">空闲关</span>
+        </button>
+        <!-- 第 2 列下：班级缩写开关 -->
+        <button class="availability-toggle-btn" id="classAbbrToggleBtn" type="button" title="点击切换班级是否缩写显示（默认缩写）">
+          <span>🏷</span><span id="classAbbrToggleLabel">班级缩写开</span>
+        </button>
+        <!-- 第 3 列上：生成图片 -->
+        <button class="image-export-btn" id="exportImageBtn" type="button" title="将当前日历课表生成 PNG 图片（按当前班级/师资筛选）">
+          <span>🖼</span><span>生成图片</span>
+        </button>
+        <!-- 第 3 列下：生成飞书表格 -->
+        <button class="image-export-btn" id="exportFeishuBtn" type="button" title="将当前日历课表生成飞书在线表格（按当前班级/师资筛选）">
+          <span>📊</span><span>生成飞书表格</span>
+        </button>
       </div>
     </header>
 
@@ -69,13 +95,13 @@
           </div>
           <div class="calendar-body">
             <div class="weekdays">
-              <div class="weekday">日</div>
               <div class="weekday">一</div>
               <div class="weekday">二</div>
               <div class="weekday">三</div>
               <div class="weekday">四</div>
               <div class="weekday">五</div>
               <div class="weekday">六</div>
+              <div class="weekday">日</div>
             </div>
             <div class="calendar-grid" id="calendarGrid"></div>
           </div>

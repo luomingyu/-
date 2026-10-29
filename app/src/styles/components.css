@@ -501,6 +501,11 @@
   color: #DC2626;
 }
 
+.schedule-status.warning {
+  background: #FFFBEB;
+  color: #B45309;
+}
+
 .schedule-status.info {
   background: #EFF6FF;
   color: #1D4ED8;

@@ -6,7 +6,7 @@
 // 管线职责：组装算法入参 → generateSchedule → scheduled 状态回写文件
 // → 生成排课报告 → 返回可直接落库/落盘的完整业务数据。
 // ============================================================
-import { generateSchedule } from './index.js';
+import { generateScheduleWithReorder } from './reorder.js';
 import { buildScheduleReportMarkdown, scheduleReportFileName } from './report.js';
 import { APP_VERSION } from '../config/constants.js';
 
@@ -33,12 +33,14 @@ import { APP_VERSION } from '../config/constants.js';
  *   appVersion?: string
  * }}
  */
-export function runSchedulePipeline({ availabilityFiles, courseSystemFiles, presetFiles, currentDate } = {}) {
+export function runSchedulePipeline({ availabilityFiles, courseSystemFiles, presetFiles, currentDate, abbreviateClass = true } = {}) {
   const availabilityData = (availabilityFiles || []).flatMap(f => f.items);
   const flatCourseSystemData = (courseSystemFiles || []).flatMap(f => f.items);
   const flatPresetData = (presetFiles || []).flatMap(f => f.items);
 
-  const result = generateSchedule({
+  // v6.0.15：在第③步无解的子表上做「同师资子表重排重试」（generateScheduleWithReorder
+  // 内部先按默认顺序排一次，失败再枚举同师资子表排列重排；详见 scheduler/reorder.js）
+  const result = generateScheduleWithReorder({
     currentDate: effectiveDate(currentDate),
     availabilityData,
     courseSystemData: flatCourseSystemData,
@@ -75,11 +77,15 @@ export function runSchedulePipeline({ availabilityFiles, courseSystemFiles, pres
     year,
     month,
     fileName: scheduleReportFileName(now, year, month),
-    content: buildScheduleReportMarkdown(reportMeta, result),
+    content: buildScheduleReportMarkdown(reportMeta, result, { abbreviateClass }),
     generatedAt: now.toISOString(),
     appVersion: APP_VERSION,
     successCount: result.successCount,
-    failedCount: result.failedCount
+    failedCount: result.failedCount,
+    // 失败课程按子表汇总（仅含失败数 > 0 的子表），供「最近报告」行展示失败课程所属子表
+    failedBySheet: (result.diagnostics?.sheetStats || [])
+      .filter(s => s.failed > 0)
+      .map(s => ({ sheetName: s.sheetName, failed: s.failed }))
   };
   // 每次排课只保留本次报告（与既有行为一致）
   const scheduleReports = [report];

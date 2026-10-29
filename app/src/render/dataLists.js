@@ -1,5 +1,6 @@
 // 空闲时间列表 + 排课结果列表渲染（树形折叠 + 事件委托删除）
 import { getScheduledCourses, getFilteredPresetFiles } from '../state/selectors.js';
+import { abbreviateClassType } from '../utils/classRegistry.js';
 
 function escapeHtml(str) {
   return String(str ?? '')
@@ -7,6 +8,31 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/**
+ * 从排课报告 markdown 的「四、排课结果摘要」表格解析失败数 > 0 的子表。
+ * 用于兼容旧版本落盘的报告（无 failedBySheet 字段）时的子表描述展示。
+ */
+function parseFailedSheetsFromContent(content) {
+  if (typeof content !== 'string' || content.length === 0) return [];
+  const result = [];
+  let inTable = false;
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!inTable) {
+      if (trimmed.startsWith('|') && trimmed.includes('课程数N') && trimmed.includes('失败')) inTable = true;
+      continue;
+    }
+    if (!trimmed.startsWith('|')) break; // 表格结束
+    const cols = trimmed.split('|').map(c => c.trim());
+    // 列序：['', 子表, 课程数N, 天数M, 时间密度L, 成功, 对齐, 失败, 模拟方案校验, 涉及师资, '']
+    if (cols.length < 9) continue;
+    const sheetName = cols[1];
+    const failed = Number(cols[7]);
+    if (sheetName && Number.isFinite(failed) && failed > 0) result.push({ sheetName, failed });
+  }
+  return result;
 }
 
 /** 根据 section 折叠状态同步父 .tree-section 的 class */
@@ -111,7 +137,7 @@ export function renderPresetList(state) {
           <div class="data-list-item">
             <div class="data-list-info">
               <div class="data-list-text">${escapeHtml(item.courseName || '(未填课节名称)')}</div>
-              <div class="data-list-subtext">${escapeHtml(item.classType)}${item.teacher ? ' · ' + escapeHtml(item.teacher) : ''} · ${item.date} · ${item.startTime} - ${item.endTime}</div>
+              <div class="data-list-subtext">${escapeHtml(state.abbreviateClass ? abbreviateClassType(item.classType || '') : item.classType)}${item.teacher ? ' · ' + escapeHtml(item.teacher) : ''} · ${item.date} · ${item.startTime} - ${item.endTime}</div>
             </div>
             <button class="delete-btn" data-action="delete-preset-item" data-item-id="${item.itemId}">删除</button>
           </div>
@@ -145,7 +171,7 @@ export function renderScheduledList(state) {
     const originalIndex = state.courses.indexOf(course);
     const displayName = course.name || '未命名课程';
     const displayTeacher = course.teacher || '';
-    const displayClass = course.classType || '';
+    const displayClass = state.abbreviateClass ? abbreviateClassType(course.classType || '') : (course.classType || '');
     const classTag = displayClass ? `<span class="scheduled-class-tag">${escapeHtml(displayClass)}</span>` : '';
     html += `
       <div class="data-list-item scheduled-list-item">
@@ -200,7 +226,13 @@ export function renderStatus(state) {
         genText = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
       }
       reportEl.className = 'schedule-status success';
-      reportEl.textContent = `最近报告：${latest.fileName}（${genText} · 应用版本 ${latest.appVersion || '-'} · 成功 ${latest.successCount ?? '-'} 门 / 失败 ${latest.failedCount ?? '-'} 门）`;
+      // 失败课程所属子表描述（v6.0.14）：优先取报告字段，旧报告回退解析正文表格
+      let failedSheets = Array.isArray(latest.failedBySheet) ? latest.failedBySheet : [];
+      if (failedSheets.length === 0) failedSheets = parseFailedSheetsFromContent(latest.content);
+      const failText = `${latest.failedCount ?? '-'} 门` + (failedSheets.length > 0
+        ? `（位于 ${failedSheets.map(s => `${s.sheetName} ${s.failed} 门`).join('、')}）`
+        : '');
+      reportEl.textContent = `最近报告：${latest.fileName}（${genText} · 应用版本 ${latest.appVersion || '-'} · 成功 ${latest.successCount ?? '-'} 门 / 失败 ${failText}）`;
     }
   }
 }

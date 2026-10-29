@@ -1,7 +1,5 @@
 // 排课算法相关常量
 
-/** 建议的课程间隔（分钟） */
-export const MIN_GAP = 10;
 /** 同班级课程最小间隔（分钟） */
 export const CLASS_MIN_GAP = 5;
 /**
@@ -29,6 +27,11 @@ export function setAvailRemovePad(x) {
  * 当同一门已排课程同时命中「师资占用」与「班级占用」时，两段占用区间在
  * buildTeacherClassAvailability 内合并取并集，等效于取 max(X, Y)。
  * 运行期可调用 setAvailRemovePadTeacher(Y) 临时调整。
+ *
+ * 同时作为「同一师资课程最小间隔」——v6.0.6 起师资间隔全局统一取 Y（缺省 30 分钟）：
+ *   阶段一正常排课、第三阶段兜底放宽、模拟枚举（enumerateFeasibleSlots）、
+ *   整表重放校验（verifySimulatedPlan）均以 Y 作为同一师资课程之间的最小间隔；
+ *   此前独立的常量 MIN_GAP=10 已删除。
  */
 export let AVAIL_REMOVE_PAD_TEACHER = 30;
 

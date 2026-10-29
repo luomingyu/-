@@ -1,16 +1,16 @@
 // 全局常量与魔数集中管理
 
-// ============ 应用版本号（v6.0.4） ============
-// 与应用文档「开发文档.md」的版本历史对齐，供页面顶部徽标展示。
-// 同时作为排课报告头部、落库报告数据（scheduleReports[].appVersion）的版本号，
-// 并作为「是否需要自动重排」的判断依据：数据中的 appVersion ≠ 此处 APP_VERSION 时自动重排刷新报告。
-// 与排课算法版本（scheduler/report.js 的 ALGORITHM_VERSION）解耦：
-//   - ALGORITHM_VERSION 仅在排课算法变更时递增，仅用于页面顶部「算法」徽标展示；
-//   - APP_VERSION 随文档版本递增（含纯展示/业务配置类改动），每次升版都会触发报告重排刷新。
-// 每次更新开发文档版本历史时，同步递增此处。
-export const APP_VERSION = 'v6.0.4';
+// ============ 应用版本号 ============
+// 单一真值：app/package.json 的 version 字段，由 scripts/gen-version.mjs
+// 在 dev/build/serve 前生成 version.generated.js（含 APP_VERSION / BUILD_TIME / GIT_SHA）。
+// 此处仅做转发，保证「页面徽标」「排课报告头部」「落库报告数据 scheduleReports[].appVersion」
+// 「是否需要自动重排」判据、以及 Node 服务器侧全部使用同一份版本号，杜绝漂移。
+export { APP_VERSION, BUILD_TIME, GIT_SHA } from './version.generated.js';
 
+// 星期名称：索引与 JS Date.getDay() 对齐（0=周日），用于按 getDay() 取值。
 export const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+// 日历表头展示顺序：周一在最左、周日最右（不改动 WEEKDAYS 的 getDay() 索引语义）。
+export const WEEKDAYS_MON_FIRST = ['一', '二', '三', '四', '五', '六', '日'];
 export const MONTHS = [
   '一月', '二月', '三月', '四月', '五月', '六月',
   '七月', '八月', '九月', '十月', '十一月', '十二月'
@@ -113,4 +113,21 @@ export function inferPresetSubject(item) {
 export function getSubjectPriority(teacher) {
   const subject = getSubjectOfTeacher(teacher);
   return subject === null ? SUBJECT_PRIORITY.length : SUBJECT_PRIORITY.indexOf(subject);
+}
+
+// ============ 科目卡片配色类（莫兰迪色系，仅用于日历课程卡片） ============
+// 日历课程卡片按「科目」着色，科目由授课师资推断（getSubjectOfTeacher）。
+// 未收录科目（师资不在名单中）使用 subject-unknown 中性灰兜底。
+export const SUBJECT_CARD_CLASS = {
+  英语: 'subject-english',
+  政治: 'subject-politics',
+  数学: 'subject-math',
+  '408计算机': 'subject-cs408',
+  日语: 'subject-japanese'
+};
+export const SUBJECT_CARD_CLASS_UNKNOWN = 'subject-unknown';
+
+/** 由师资推断日历课程卡片使用的科目样式类；无法识别时返回灰色兜底类 */
+export function getSubjectCardClass(teacher) {
+  return SUBJECT_CARD_CLASS[getSubjectOfTeacher(teacher)] || SUBJECT_CARD_CLASS_UNKNOWN;
 }

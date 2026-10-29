@@ -1,8 +1,9 @@
 // 日历渲染
-import { WEEKDAYS, MONTHS } from '../config/constants.js';
+import { WEEKDAYS, MONTHS, getSubjectCardClass } from '../config/constants.js';
 import { formatDate, isToday, isSelected } from '../utils/dateUtils.js';
 import { getCoursesForDate, getAvailabilityForDate, getPresetForDate } from '../state/selectors.js';
 import { setCurrentDate, setSelectedDate } from '../state/store.js';
+import { abbreviateClassType } from '../utils/classRegistry.js';
 
 function escapeHtml(str) {
   return String(str ?? '')
@@ -12,15 +13,16 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-export function getCourseCardClass(type) {
-  return `course-card ${type}`;
+export function getCourseCardClass(type, teacher) {
+  return `course-card ${type} ${getSubjectCardClass(teacher)}`;
 }
 
 /** 计算月历 42 格（6 周）的日期数据（含上下月补位） */
 export function getMonthDayData(year, month) {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
-  const startDay = firstDay.getDay();
+  // 表头为周一开头，故首列偏移以「周一=0」计算
+  const startDay = (firstDay.getDay() + 6) % 7;
   const totalDays = lastDay.getDate();
 
   const allDays = [];
@@ -149,14 +151,16 @@ function createDayCell(dayData, state) {
 
   timeline.forEach(course => {
     const card = document.createElement('div');
-    card.className = getCourseCardClass(course.type);
-    const displayClass = course.classType || '';
+    card.className = getCourseCardClass(course.type, course.teacher);
+    const displayClass = state.abbreviateClass
+      ? abbreviateClassType(course.classType || '')
+      : (course.classType || '');
     const displayTeacher = course.teacher || '';
     card.innerHTML = `
       ${displayClass ? `<div class="course-class">${escapeHtml(displayClass)}</div>` : ''}
       <div class="course-name">${escapeHtml(course.name)}</div>
-      <div class="course-time">${course.startTime} - ${course.endTime}</div>
       <div class="course-teacher">${escapeHtml(displayTeacher)}</div>
+      <div class="course-time">${course.startTime} - ${course.endTime}</div>
     `;
     dayCoursesEl.appendChild(card);
   });

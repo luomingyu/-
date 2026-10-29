@@ -7,7 +7,8 @@ import { registerSlot, createScheduleContext, buildTeacherClassAvailability, has
 import { calculateTimePriorityScore } from './timePriority.js';
 import { EVENING_START, EVENING_END, OPTIMAL_EVENING } from '../config/constants.js';
 import { timeToMinutes, minutesToTime, durationToMinutes } from '../utils/dateUtils.js';
-import { hasMultipleClasses } from '../utils/classType.js';
+import { isMergeCourse } from '../utils/sheetForm.js';
+import { AVAIL_REMOVE_PAD_TEACHER } from './constants.js';
 
 /**
  * 创建「基于全局上下文」的模拟上下文（v5.58）：
@@ -38,15 +39,9 @@ function getDayOfMonth(dateStr) {
   return parseInt(dateStr.slice(-2), 10);
 }
 
-/**
- * 合班课识别（与 index.js 同一规则，v5.61）：
- * mergeNote 含「合班」标记，或 classType 为多个班级（需多个班级同时空闲）。
- * 模拟排课中合班课不受 cutAfter 截断（与主排 courseCutAfter=null 一致），
- * 已定日期合班课（fixedMergeSlots）则直接落定固定槽。
- */
-function isMergeCourse(item) {
-  return (item && item.mergeNote && String(item.mergeNote).includes('合班')) || hasMultipleClasses(item && item.classType);
-}
+// 合班课识别（v6.1）：统一由 utils/sheetForm.js 提供（跨子表 6 字段全等判定 + 课程行预计算标记）。
+// 模拟排课中合班课不受 cutAfter 截断（与主排 courseCutAfter=null 一致），
+// 已定日期合班课（fixedMergeSlots）则直接落定固定槽。
 
 
 /**
@@ -212,10 +207,14 @@ function buildSyntheticCourses(totalCourses, teacher, availableDates, rangeStart
 }
 
 /**
- * 枚举某课在师资-班级空闲碎片内所有「可放」时段槽（5 分钟步长，最宽松 minGap=0）
- * 每个候选槽均通过 hasConflict 校验（师资同天不重叠 + 班级时段互斥 + 师资班级每天一节）
+ * 枚举某课在师资-班级空闲碎片内所有「可放」时段槽（5 分钟步长）
+ * 每个候选槽均通过 hasConflict 校验（师资同天不重叠 + 班级时段互斥 + 师资班级每天一节），
+ * 同一师资间隔取 AVAIL_REMOVE_PAD_TEACHER（Y，缺省 30 分钟）——v6.0.6 起与整表校验、
+ * 逐课排课全局统一（此前为最宽松的 minGap=0）。
+ * @param {boolean} [allowSameDay=false] v6.0.7：忽略「同一师资+同一班级每天至多一节」整日硬约束
+ *        （宏观第③步忽略整日封锁的 13 策略模拟），仅按师资/班级时间窗（间隔）判定冲突。
  */
-function enumerateFeasibleSlots(fragments, course, simCtx) {
+function enumerateFeasibleSlots(fragments, course, simCtx, allowSameDay = false) {
   const duration = courseDurationMinutes(course);
   const slots = [];
   for (const f of fragments) {
@@ -225,7 +224,7 @@ function enumerateFeasibleSlots(fragments, course, simCtx) {
       const slotStart = availStart + offset;
       const slotEnd = slotStart + duration;
       if (slotEnd > availEnd) break;
-      if (hasConflict(simCtx, { teacher: course.teacher, classType: course.classType, date: f.date, slotStart, slotEnd, minGap: 0 })) continue;
+      if (hasConflict(simCtx, { teacher: course.teacher, classType: course.classType, date: f.date, slotStart, slotEnd, minGap: AVAIL_REMOVE_PAD_TEACHER, allowSameDay })) continue;
       slots.push({
         date: f.date,
         startMinutes: slotStart,
@@ -448,7 +447,7 @@ function simulateHeuristicDates(courses, pools, unionDates, allMonthDates) {
  *        greedy-heuristic（贪心+启发式：每步选一天，启发式估计剩余课潜在分散分，v5.56）
  * @returns {{slots: Array, dates: string[]}|null} 任一课程无可行槽则整体不可行 → null
  */
-export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, strategy, rangeStart, rangeEnd, baseCtx, tailReserve, cutAfter, fixedMergeSlots = null, headReserve = null, cutBefore = null) {
+export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, strategy, rangeStart, rangeEnd, baseCtx, tailReserve, cutAfter, fixedMergeSlots = null, headReserve = null, cutBefore = null, allowSameDay = false) {
   const N = courses.length;
   if (N === 0) return null;
   const meta = STRATEGY_META[strategy] || STRATEGY_META['evening-spread'];
@@ -469,13 +468,13 @@ export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, 
     if (fx) return [fx.date]; // 已定日期合班课：仅固定日期可排
     const cStart = c.startDate || rangeStart;
     const cEnd = c.endDate || rangeEnd;
-    const frags = buildTeacherClassAvailability(monthAvailability, c.teacher, c.classType, baselineCtx, { ...(tailReserve ? { tailReserve } : {}), ...(((cutAfter && !isMergeCourse(c)) ? { cutAfter } : {})), ...(headReserve ? { headReserve } : {}), ...(((cutBefore && !isMergeCourse(c)) ? { cutBefore } : {})) })
-      .filter(f => dateInRange(f.date, cStart, cEnd))
-      // v6.0.1 日期池口径统一：与槽位层 hasConflict 的首道硬约束（同师资同班每天至多一节）对齐。
-      // buildTeacherClassAvailability 只做「时间段差集」，被先前子表占死的整日仍会残留碎片
-      // （如扣除晚间 19:00-20:30 后仍剩 14:00-18:30），形成「日期层可用、槽位层全灭」的幽灵
-      // 日期，误导 uniform/mid/back 等分散策略的日期布局 → 全部退化到最早连续排。此处前置剔除。
-      .filter(f => !hasTeacherClassOnDate(baselineCtx, { teacher: c.teacher, classType: c.classType, date: f.date }));
+    const frags = buildTeacherClassAvailability(monthAvailability, c.teacher, c.classType, baselineCtx, { ...(tailReserve ? { tailReserve } : {}), ...(((cutAfter && !isMergeCourse(c)) ? { cutAfter } : {})), ...(headReserve ? { headReserve } : {}), ...(((cutBefore && !isMergeCourse(c)) ? { cutBefore } : {})), allowSameDay })
+      .filter(f => dateInRange(f.date, cStart, cEnd));
+    // v6.1：整日封锁已并入空闲表本身（buildTeacherClassAvailability 传 allowSameDay）——
+    //   allowSameDay=false（第①步严格模拟）时「同师资同班当日已有课」的整天已被整体移除，
+    //   至此不再出现「日期层可用、槽位层全灭」的幽灵日期（v6.0.1 的前置剔除改由空闲表承担）；
+    //   allowSameDay=true（宏观第③步忽略整日封锁）时保留这些整日为候选，槽位层由
+    //   hasConflict(allowSameDay) 仅按师资/班级时间窗判定。
     return [...new Set(frags.map(f => f.date))].sort();
   });
   // 任一课程在其区间内毫无可行日期 → 该策略整体不可行
@@ -693,9 +692,9 @@ export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, 
   };
 
   const placeOn = (course, date, courseIndex) => {
-    const frags = buildTeacherClassAvailability(monthAvailability, course.teacher, course.classType, simCtx, { ...(tailReserve ? { tailReserve } : {}), ...(((cutAfter && !isMergeCourse(course)) ? { cutAfter } : {})), ...(headReserve ? { headReserve } : {}), ...(((cutBefore && !isMergeCourse(course)) ? { cutBefore } : {})) })
+    const frags = buildTeacherClassAvailability(monthAvailability, course.teacher, course.classType, simCtx, { ...(tailReserve ? { tailReserve } : {}), ...(((cutAfter && !isMergeCourse(course)) ? { cutAfter } : {})), ...(headReserve ? { headReserve } : {}), ...(((cutBefore && !isMergeCourse(course)) ? { cutBefore } : {})), allowSameDay })
       .filter(f => f.date === date);
-    return pickSlot(enumerateFeasibleSlots(frags, course, simCtx), courseIndex);
+    return pickSlot(enumerateFeasibleSlots(frags, course, simCtx, allowSameDay), courseIndex);
   };
 
   for (const i of order) {
@@ -783,9 +782,9 @@ export function simulateScheduleOnce(courses, monthAvailability, allMonthDates, 
       const dayStr = shiftDay(cur.date, delta);
       if (!pools[i].includes(dayStr)) continue;
       const frags = buildTeacherClassAvailability(monthAvailability, course.teacher, course.classType, simCtx,
-        { ...(tailReserve ? { tailReserve } : {}), ...(((cutAfter && !isMergeCourse(course)) ? { cutAfter } : {})), ...(headReserve ? { headReserve } : {}), ...(((cutBefore && !isMergeCourse(course)) ? { cutBefore } : {})) })
+        { ...(tailReserve ? { tailReserve } : {}), ...(((cutAfter && !isMergeCourse(course)) ? { cutAfter } : {})), ...(headReserve ? { headReserve } : {}), ...(((cutBefore && !isMergeCourse(course)) ? { cutBefore } : {})), allowSameDay })
         .filter(f => f.date === dayStr);
-      const slotList = enumerateFeasibleSlots(frags, course, simCtx);
+      const slotList = enumerateFeasibleSlots(frags, course, simCtx, allowSameDay);
       const best = pickSlot(slotList, i); // 该日按本策略语义的最优槽
       if (best && best.timeScore > (cur.timeScore || 0)) {
         better.push({ date: dayStr, startTime: best.startTime, endTime: best.endTime, isEvening: best.isEvening, timeScore: best.timeScore });
@@ -918,7 +917,7 @@ export function scoreSimulatedPlan(plan, allMonthDates) {
  *         candidates = 全部候选方案（含策略名/评分/各维度明细 detail/槽位序列，按评分降序），
  *         供排课报告展示「各分散策略详情与评分 + 模拟日历表」（v5.51.1）
  */
-export function findBestDispersionPlan(availableDates, totalCourses, teacher, monthAvailability, allMonthDates, rangeStart = null, rangeEnd = null, courses = null, baseCtx = null, tailReserve = null, cutAfter = null, fixedMergeSlots = null, headReserve = null, cutBefore = null) {
+export function findBestDispersionPlan(availableDates, totalCourses, teacher, monthAvailability, allMonthDates, rangeStart = null, rangeEnd = null, courses = null, baseCtx = null, tailReserve = null, cutAfter = null, fixedMergeSlots = null, headReserve = null, cutBefore = null, allowSameDay = false) {
   const courseArr = courses && courses.length > 0
     ? courses
     : buildSyntheticCourses(totalCourses, teacher, availableDates, rangeStart, rangeEnd);
@@ -950,7 +949,7 @@ export function findBestDispersionPlan(availableDates, totalCourses, teacher, mo
   for (const strategy of strategies) {
     try {
       // 只对自由课模拟（freeIndexes 存在时一律传 null 的 fixedMergeSlots，避免索引错位）
-      const rawFree = simulateScheduleOnce(freeCourses, monthAvailability, allMonthDates, strategy, rangeStart, rangeEnd, baseCtx, tailReserve, cutAfter, freeIndexes ? null : fixedMergeSlots, headReserve, cutBefore);
+      const rawFree = simulateScheduleOnce(freeCourses, monthAvailability, allMonthDates, strategy, rangeStart, rangeEnd, baseCtx, tailReserve, cutAfter, freeIndexes ? null : fixedMergeSlots, headReserve, cutBefore, allowSameDay);
       if (!rawFree) {
         if (!!process.env.SCHEDULE_DEBUG) console.log(`    [模拟排课] 策略 ${strategy} 不可行（两阶段模拟：日期层无解或槽位层放不下）`);
         continue;

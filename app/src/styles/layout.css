@@ -17,10 +17,22 @@
   flex-shrink: 0;
 }
 
+/* 右侧操作区：两行三列（列方向填充，v6.0.9）
+   第 1 列：排课 / 查看；第 2 列：空闲开关 / 班级缩写开关；第 3 列：生成图片 / 生成飞书表格 */
 .top-bar__actions {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  display: grid;
+  grid-template-rows: repeat(2, auto);
+  grid-auto-flow: column;
+  gap: 8px 12px;
+  align-items: stretch;
+  justify-items: stretch;
+}
+
+/* 网格内按钮撑满单元格高度，与左侧操作分组对齐 */
+.top-bar__actions > .availability-toggle-btn,
+.top-bar__actions > .image-export-btn {
+  height: auto;
+  min-height: 40px;
 }
 
 /* 顶部操作分组：排课 / 查看 */
@@ -68,6 +80,137 @@
 .month-selector__select:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* 班级 / 师资 多选筛选（复选框下拉面板，v6.0.13） */
+.multi-select {
+  position: relative;
+}
+
+.multi-select__trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  min-width: 110px;
+  max-width: 190px;
+}
+
+.multi-select__trigger:hover {
+  border-color: var(--primary);
+}
+
+.multi-select__trigger.active {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.multi-select__trigger:focus-visible {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.multi-select__label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.multi-select__caret {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.multi-select__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 1200;
+  min-width: 100%;
+  max-width: 280px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+  padding: 8px;
+}
+
+.multi-select__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 4px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.multi-select__panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.multi-select__clear {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.multi-select__clear:hover {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.multi-select__options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.multi-select__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.multi-select__option:hover {
+  background: #F1F5F9;
+}
+
+.multi-select__option input {
+  cursor: pointer;
+  margin: 0;
+}
+
+.multi-select__empty {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 8px 6px;
 }
 
 /* 空闲时间显示切换按钮（查看区） */
@@ -141,22 +284,7 @@
   white-space: nowrap;
 }
 
-/* 算法版本徽标（标题右侧，显示排课算法版本号） */
-.algorithm-badge {
-  font-size: 12px;
-  font-weight: 600;
-  font-family: ui-monospace, Consolas, "Courier New", monospace;
-  color: var(--primary);
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.45);
-  border-radius: 999px;
-  padding: 3px 10px;
-  line-height: 1.4;
-  white-space: nowrap;
-  user-select: none;
-}
-
-/* 应用版本徽标（标题右侧，显示与开发文档同步的应用版本号；中性灰以区别于算法版本徽标） */
+/* 应用版本徽标（标题右侧，只显示版本号，与构建产物同源） */
 .app-version-badge {
   font-size: 12px;
   font-weight: 600;

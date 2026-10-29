@@ -1,12 +1,16 @@
 {
   "name": "field-scheduling-app",
   "private": true,
-  "version": "0.1.0",
+  "version": "6.1.0",
   "type": "module",
   "scripts": {
+    "gen-version": "node scripts/gen-version.mjs",
+    "predev": "npm run gen-version",
     "dev": "vite",
+    "prebuild": "npm run gen-version",
     "build": "vite build",
     "preview": "vite preview",
+    "preserve": "npm run gen-version",
     "serve": "node ../server/index.mjs",
     "lark:token": "node scripts/save-lark-token.mjs",
     "sync": "npm run build && node scripts/regen-backend-schedule.mjs"

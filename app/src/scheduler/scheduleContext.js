@@ -310,6 +310,11 @@ export function applyCutBefore(availability, cutBefore) {
  * @param {Object} [options.cutBefore] 合班课之前截断配置 { date: 'YYYY-MM-DD', endTime: 'HH:MM' }
  *        date = 子表内最后一个已排日期合班课的日期；endTime = 切割时刻
  *        （合班课结束时间 + AVAIL_REMOVE_PAD 分钟，如 19:00 → 19:05）
+ * @param {boolean} [options.allowSameDay=false] v6.1：`false`（默认）=把「同一师资+同一班级当日
+ *        已有课」的整天从空闲表中**整体移除**（整日封锁体现在空闲表本身）；
+ *        `true`（宏观第③步忽略整日封锁 / legacy 兜底放宽）=保留这些整日，仅按同天时段间隔判定。
+ * @param {Array<string>} [options.dayLockedDates] v6.1：可选数组，回传本次因整日封锁而被移除的日期
+ *        （去重，升序写入调用方数组），供排课报告标注意整日封锁内容
  * @returns {Array} 过滤后的空闲时间列表（仅包含未被班级与师资占用的时段）
  */
 export function buildTeacherClassAvailability(monthAvailability, teacher, classType, ctx, options = {}) {
@@ -322,6 +327,13 @@ export function buildTeacherClassAvailability(monthAvailability, teacher, classT
     options.cutBefore
   );
   if (teacherAvail.length === 0) return [];
+
+  // v6.1：整日封锁（同一师资 + 同一班级每天至多一节）体现在空闲表本身 —— allowSameDay=false 时，
+  // 把命中该硬约束的整天从空闲表中**整体移除**（此前仅在 hasConflict / 日期池处单独过滤，
+  // 空闲表本身不体现，导致报告快照与排课判定口径不一致）。allowSameDay=true（宏观第③步 /
+  // legacy 兜底放宽）时保留这些整日，仅由 hasConflict 按同天时段间隔判定。
+  const allowSameDay = options.allowSameDay === true;
+  const dayLockedDates = options.dayLockedDates;
 
   // 合班课（v5.27）：合并所有班级的已占用课程（任一班级冲突即不可排）
   // 将各班级的 classScheduleByDate 并集到同一张 [date] -> courses 映射
@@ -377,6 +389,11 @@ export function buildTeacherClassAvailability(monthAvailability, teacher, classT
   //   同师资自身课节不在此判断，由下方 teacherCourses 单独扣除
   const currentSubject = getSubjectOfTeacher(teacher);
   for (const avail of teacherAvail) {
+    // v6.1：整日封锁——该师资该班级当天已有课 → 整天从空闲表整体移除（allowSameDay=true 时跳过）
+    if (!allowSameDay && hasTeacherClassOnDate(ctx, { teacher, classType, date: avail.date })) {
+      if (Array.isArray(dayLockedDates) && !dayLockedDates.includes(avail.date)) dayLockedDates.push(avail.date);
+      continue;
+    }
     const availStart = timeToMinutes(avail.startTime);
     const availEnd = timeToMinutes(avail.endTime);
 

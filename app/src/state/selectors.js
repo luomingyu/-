@@ -1,28 +1,35 @@
 // 派生查询（纯函数，接收 state 片段）
 import { splitClassTypes } from '../utils/classType.js';
 
-/** 筛选课程是否命中选中的班级（合班课：任一班级匹配即命中） */
-function matchesSelectedClass(course, selectedClass) {
-  if (!selectedClass) return true;
-  return splitClassTypes(course.classType).includes(selectedClass);
+/** 筛选课程是否命中选中的班级（多选：空=全部；合班课展开后与任一选中班级有交集即命中） */
+function matchesSelectedClass(course, selectedClasses) {
+  if (!selectedClasses || selectedClasses.length === 0) return true;
+  const classes = splitClassTypes(course.classType);
+  return selectedClasses.some(cls => classes.includes(cls));
 }
 
-/** 获取某日的课程（按开始时间排序，支持班级/师资筛选） */
+/** 筛选是否命中选中的师资（多选：空=全部；命中任一选中师资即通过） */
+function matchesSelectedTeacher(item, selectedTeachers) {
+  if (!selectedTeachers || selectedTeachers.length === 0) return true;
+  return selectedTeachers.includes(item.teacher);
+}
+
+/** 获取某日的课程（按开始时间排序，支持班级/师资多选筛选） */
 export function getCoursesForDate(state, dateStr) {
-  const { selectedClass, selectedTeacher } = state;
+  const { selectedClasses, selectedTeachers } = state;
   return state.courses
     .filter(course => course.date === dateStr)
-    .filter(course => matchesSelectedClass(course, selectedClass))
-    .filter(course => !selectedTeacher || course.teacher === selectedTeacher)
+    .filter(course => matchesSelectedClass(course, selectedClasses))
+    .filter(course => matchesSelectedTeacher(course, selectedTeachers))
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
 }
 
-/** 获取排课结果列表（支持班级/师资筛选） */
+/** 获取排课结果列表（支持班级/师资多选筛选） */
 export function getScheduledCourses(state) {
-  const { selectedClass, selectedTeacher } = state;
+  const { selectedClasses, selectedTeachers } = state;
   return state.courses
-    .filter(course => matchesSelectedClass(course, selectedClass))
-    .filter(course => !selectedTeacher || course.teacher === selectedTeacher)
+    .filter(course => matchesSelectedClass(course, selectedClasses))
+    .filter(course => matchesSelectedTeacher(course, selectedTeachers))
     .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
 }
 
@@ -48,38 +55,38 @@ export function getAllTeachers(state) {
   return [...teacherSet].sort();
 }
 
-/** 获取某日的空闲时间（按开始时间排序，支持师资筛选） */
+/** 获取某日的空闲时间（按开始时间排序，支持师资多选筛选） */
 export function getAvailabilityForDate(state, dateStr) {
-  const { selectedTeacher } = state;
+  const { selectedTeachers } = state;
   return state.availabilityData
     .filter(item => item.date === dateStr)
-    .filter(item => !selectedTeacher || item.teacher === selectedTeacher)
+    .filter(item => matchesSelectedTeacher(item, selectedTeachers))
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
 }
 
-/** 是否命中已排课表的班级/师资筛选 */
-function matchesPresetFilter(item, selectedClass, selectedTeacher) {
-  if (!matchesSelectedClass(item, selectedClass)) return false;
-  if (selectedTeacher && item.teacher !== selectedTeacher) return false;
+/** 是否命中已排课表的班级/师资多选筛选 */
+function matchesPresetFilter(item, selectedClasses, selectedTeachers) {
+  if (!matchesSelectedClass(item, selectedClasses)) return false;
+  if (!matchesSelectedTeacher(item, selectedTeachers)) return false;
   return true;
 }
 
-/** 获取某日的已排课表条目（按开始时间排序，支持班级/师资筛选；师资为空时不参与师资筛选） */
+/** 获取某日的已排课表条目（按开始时间排序，支持班级/师资多选筛选；师资为空时不参与师资筛选） */
 export function getPresetForDate(state, dateStr) {
-  const { selectedClass, selectedTeacher } = state;
+  const { selectedClasses, selectedTeachers } = state;
   return (state.presetData || [])
     .filter(item => item.date === dateStr)
-    .filter(item => matchesPresetFilter(item, selectedClass, selectedTeacher))
+    .filter(item => matchesPresetFilter(item, selectedClasses, selectedTeachers))
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
 }
 
-/** 已排课表文件（按选中班级/师资过滤条目；过滤后无条目的文件不返回） */
+/** 已排课表文件（按选中班级/师资多选过滤条目；过滤后无条目的文件不返回） */
 export function getFilteredPresetFiles(state) {
-  const { selectedClass, selectedTeacher } = state;
+  const { selectedClasses, selectedTeachers } = state;
   return (state.presetFiles || [])
     .map(file => ({
       ...file,
-      items: file.items.filter(item => matchesPresetFilter(item, selectedClass, selectedTeacher))
+      items: file.items.filter(item => matchesPresetFilter(item, selectedClasses, selectedTeachers))
     }))
     .filter(file => file.items.length > 0);
 }

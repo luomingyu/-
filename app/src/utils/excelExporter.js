@@ -1,10 +1,14 @@
 import * as XLSX from 'xlsx';
+import { abbreviateClassType } from './classRegistry.js';
 
 /**
  * 导出排课结果为 Excel 文件
  * 格式：班级 | 课程名称 | 日期 | 授课时间（开始-结束） | 授课师资
+ * @param {Array} courses 排课结果
+ * @param {string} fileName 导出文件名
+ * @param {boolean} [abbreviateClass=false] 是否将班级缩写为批量简称（v6.0.8）
  */
-export function exportScheduledToExcel(courses, fileName = '排课结果.xlsx') {
+export function exportScheduledToExcel(courses, fileName = '排课结果.xlsx', abbreviateClass = false) {
   if (!courses || courses.length === 0) {
     alert('暂无排课数据可导出');
     return;
@@ -13,7 +17,7 @@ export function exportScheduledToExcel(courses, fileName = '排课结果.xlsx') 
   const aoa = [
     ['班级', '课程名称', '日期', '授课时间', '授课师资'],
     ...courses.map(c => [
-      c.classType || '',
+      abbreviateClass ? abbreviateClassType(c.classType || '') : (c.classType || ''),
       c.name || '',
       c.date || '',
       `${c.startTime || ''} - ${c.endTime || ''}`,

@@ -15,9 +15,10 @@ const nextItemId = () => `item-${++_itemIdCounter}`;
 const initialState = {
   currentDate: new Date(),
   selectedDate: new Date(),
-  selectedClass: '',          // 班级筛选：空字符串=全部班级
-  selectedTeacher: '',        // 师资筛选：空字符串=全部师资
-  showAvailability: true,     // 日历是否显示空闲时间（默认显示，查看区按钮切换）
+  selectedClasses: [],        // 班级筛选（多选）：空数组=全部班级（v6.0.13）
+  selectedTeachers: [],       // 师资筛选（多选）：空数组=全部师资（v6.0.13）
+  showAvailability: false,    // 日历是否显示空闲时间（默认隐藏，查看区按钮切换；v6.0.11 默认改为关）
+  abbreviateClass: true,      // 班级是否缩写显示（默认缩写，查看区按钮切换；v6.0.8）
   // 真实存储：按文件分组
   availabilityFiles: [],      // { id, fileName, uploadedAt, items: [{ itemId, teacher, date, startTime, endTime }] }
   courseSystemFiles: [],      // { id, fileName, uploadedAt, items: [{ itemId, classType, courseName, teacher, duration, scheduled }] }
@@ -103,12 +104,24 @@ function withItemIds(items) {
 // ============ 通用 Actions ============
 export function setCurrentDate(date) { setState({ currentDate: date }); }
 export function setSelectedDate(date) { setState({ selectedDate: date }); }
-export function setSelectedClass(cls) { setState({ selectedClass: cls || '' }); }
-export function setSelectedTeacher(teacher) { setState({ selectedTeacher: teacher || '' }); }
+/** 设置选中的班级（多选数组；空数组=全部班级；纯 UI 状态，不触发持久化） */
+export function setSelectedClasses(classes) {
+  setState({ selectedClasses: Array.isArray(classes) ? [...classes] : [] });
+}
 
-/** 切换日历是否显示空闲时间（默认显示；纯 UI 状态，不触发持久化） */
+/** 设置选中的师资（多选数组；空数组=全部师资；纯 UI 状态，不触发持久化） */
+export function setSelectedTeachers(teachers) {
+  setState({ selectedTeachers: Array.isArray(teachers) ? [...teachers] : [] });
+}
+
+/** 切换日历是否显示空闲时间（默认隐藏；纯 UI 状态，不触发持久化） */
 export function toggleShowAvailability() {
   setState({ showAvailability: !state.showAvailability });
+}
+
+/** 切换班级是否缩写显示（默认缩写；纯 UI 状态，不触发持久化；v6.0.8） */
+export function toggleAbbreviateClass() {
+  setState({ abbreviateClass: !state.abbreviateClass });
 }
 export function setUploadStatus(key, text, kind) { setStatus(key, text, kind); }
 
@@ -280,7 +293,8 @@ export async function runSchedule() {
         availabilityFiles: state.availabilityFiles,
         courseSystemFiles: state.courseSystemFiles,
         presetFiles: state.presetFiles,
-        currentDate: state.currentDate
+        currentDate: state.currentDate,
+        abbreviateClass: state.abbreviateClass
       })
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -300,7 +314,8 @@ export async function runSchedule() {
       availabilityFiles: state.availabilityFiles,
       courseSystemFiles: state.courseSystemFiles,
       presetFiles: state.presetFiles,
-      currentDate: state.currentDate
+      currentDate: state.currentDate,
+      abbreviateClass: state.abbreviateClass
     });
   }
 
@@ -373,9 +388,10 @@ export function toggleFile(fileId) {
 
 /**
  * 应用启动时调用：若本机服务器可用，把磁盘上保存的业务数据恢复到内存。
- * @returns {Promise<{loaded: boolean, upgraded: string|null}>}
- *   loaded  是否成功从服务器加载到数据
+ * @returns {Promise<{loaded: boolean, upgraded: string|null, stale?: string}>}
+ *   loaded   是否成功从服务器加载到数据
  *   upgraded 若后端数据版本落后于当前应用版本，自动重排后返回最新应用版本；否则为 null
+ *   stale    若后端数据版本落后且无课程体系数据、无法自动重排时，返回落后版本号（供显式提示）
  */
 export async function hydrateFromServer() {
   const data = await loadFromServer();
@@ -412,12 +428,16 @@ export async function hydrateFromServer() {
   // 打开页面即自动用当前版本重新排课并落盘，保证后端数据版本始终跟随代码。
   const reports = data.scheduleReports;
   const storedVersion = reports?.[0]?.appVersion;
-  if (Array.isArray(reports) && reports.length > 0 && storedVersion !== APP_VERSION && courseSystemFiles.length > 0) {
-    console.log(`[版本] 后端数据版本 ${storedVersion || '无'} ≠ 当前代码 ${APP_VERSION}，自动重新排课升级数据...`);
-    const ok = await runSchedule();
-    if (ok) {
-      return { loaded: true, upgraded: APP_VERSION };
+  if (Array.isArray(reports) && reports.length > 0 && storedVersion !== APP_VERSION) {
+    if (courseSystemFiles.length > 0) {
+      console.log(`[版本] 后端数据版本 ${storedVersion || '无'} ≠ 当前代码 ${APP_VERSION}，自动重新排课升级数据...`);
+      const ok = await runSchedule();
+      if (ok) {
+        return { loaded: true, upgraded: APP_VERSION };
+      }
     }
+    // 无课程体系数据（仅有历史报告）无法自动重排：显式暴露，避免徽标版本与报告版本长期静默不一致
+    return { loaded: true, upgraded: null, stale: storedVersion || '无版本字段' };
   }
 
   return { loaded: true, upgraded: null };

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import XLSX from 'xlsx';
 import { fileURLToPath } from 'node:url';
-import { generateSchedule } from '../src/scheduler/index.js';
+import { generateScheduleWithReorder } from '../src/scheduler/reorder.js';
 import { buildScheduleReportMarkdown, scheduleReportFileName } from '../src/scheduler/report.js';
 import { APP_VERSION } from '../src/config/constants.js';
 
@@ -20,15 +20,17 @@ const dataFile = path.join(root, 'server-data', 'data.json');
 const data = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
 const availabilityData = (data.availabilityFiles || []).flatMap(f => f.items || []);
 const courseSystemData = (data.courseSystemFiles || []).flatMap(f => f.items || []);
-console.log(`后台数据：空闲 ${availabilityData.length} 条，课程体系 ${courseSystemData.length} 门`);
+const presetData = (data.presetFiles || []).flatMap(f => f.items || []);
+console.log(`后台数据：空闲 ${availabilityData.length} 条，课程体系 ${courseSystemData.length} 门，已排课 ${presetData.length} 条`);
 
 // 排课月份 = 课程体系表中最早的起始日期所在月（后台数据为 2026-09）
 const startDates = courseSystemData.map(i => i.startDate).filter(Boolean).sort();
 const currentDate = new Date(startDates[0] || '2026-09-01');
 console.log(`排课月份：${currentDate.getFullYear()} 年 ${currentDate.getMonth() + 1} 月`);
 
-// ---------- 复跑排课 ----------
-const result = generateSchedule({ currentDate, availabilityData, courseSystemData });
+// ---------- 复跑排课（含同师资子表重排重试，与 pipeline/前端一致） ----------
+// 入参须与服务器/前端一致：含已排课表（presetData），否则结果会与后台不一致
+const result = generateScheduleWithReorder({ currentDate, availabilityData, courseSystemData, presetData });
 if (!result.ok) {
   console.error('排课失败:', result.error);
   process.exit(1);
@@ -78,6 +80,7 @@ const courseSystemFiles = data.courseSystemFiles.map(f => ({
 const payload = {
   availabilityFiles: data.availabilityFiles,
   courseSystemFiles,
+  presetFiles: data.presetFiles || [],
   courses: result.courses,
   scheduleReports: [report]
 };
@@ -90,7 +93,7 @@ if (!resp.ok) throw new Error(`服务器回写失败：HTTP ${resp.status}`);
 console.log(`已回写服务器数据：courses ${result.courses.length} 条，课程表 scheduled 已更新`);
 
 // ---------- 导出排课结果 Excel（与 excelExporter.js / verify-schedule.mjs 相同格式） ----------
-const outFile = path.join(appRoot, 'test-data', `排课结果_${y}年0${month}月.xlsx`);
+const outFile = path.join(appRoot, 'test-data', `排课结果_${y}年${String(month).padStart(2, '0')}月.xlsx`);
 const aoa = [
   ['班级', '课程名称', '日期', '授课时间', '授课师资'],
   ...result.courses

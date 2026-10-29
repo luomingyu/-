@@ -36,15 +36,17 @@ export function needsScheduleUpgrade(data) {
  * @param {Array}    input.courseSystemFiles 课程体系表（按文件分组）
  * @param {Array}    [input.presetFiles] 已排课表（v5.85，按文件分组），可缺省
  * @param {string|Date} [input.currentDate] Date ISO 字符串或 Date 对象
+ * @param {boolean} [input.abbreviateClass] 排课报告是否将班级缩写为批量简称（v6.0.8，默认 true）
  * @returns {Object} 与 runSchedulePipeline 相同结构的完整结果
  */
-export function runServerSchedule({ availabilityFiles, courseSystemFiles, presetFiles, currentDate } = {}) {
+export function runServerSchedule({ availabilityFiles, courseSystemFiles, presetFiles, currentDate, abbreviateClass = true } = {}) {
   const date = typeof currentDate === 'string' ? new Date(currentDate) : currentDate;
   const result = runSchedulePipeline({
     availabilityFiles,
     courseSystemFiles,
     presetFiles,
-    currentDate: date
+    currentDate: date,
+    abbreviateClass
   });
   if (result.ok) logScheduleSummary(result);
   return result;

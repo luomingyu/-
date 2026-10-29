@@ -134,9 +134,17 @@ function serveStatic(req, res) {
 // ---------- 路由 ----------
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', (chunk) => { body += chunk; if (body.length > 32 * 1024 * 1024) { req.destroy(); reject(new Error('body too large')); } });
-    req.on('end', () => resolve(body));
+    // chunk 是 Buffer：必须先把原始字节累积起来，结束后一次性按 UTF-8 解码。
+    // 若直接 body += chunk（隐式逐块 toString），多字节字符恰好被拆到两个 chunk 边界时
+    // 会被各自解码成 U+FFFD（�），导致中文落盘后永久乱码。
+    const chunks = [];
+    let size = 0;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > 32 * 1024 * 1024) { req.destroy(); reject(new Error('body too large')); return; }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
 }
@@ -170,10 +178,30 @@ function tokenExpireAt(token) {
   }
 }
 
-/** 飞书凭证：优先用当前进程环境变量，其次用本机保存的凭证文件（取过期时间更晚的） */
+/**
+ * 飞书凭证解析：
+ * 1) 优先使用 lark-cli 本机持久登录态（config init + auth login 建立，token 过期会自动续期）；
+ *    此模式下必须清掉外部注入的 LARK* 变量，否则 CLI 会进入「外部凭证模式」而忽略持久登录。
+ * 2) 次选本机保存的临时凭证文件 trae-credentials.json（取过期时间更晚的）作为兜底。
+ */
 function resolveLarkEnv() {
   const env = { ...process.env };
-  const filePath = path.join(os.homedir(), '.lark-cli', 'trae-credentials.json');
+  const cliDir = path.join(os.homedir(), '.lark-cli');
+
+  // 1) 已有的持久登录：config.json 中记录了已授权的用户
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(cliDir, 'config.json'), 'utf8'));
+    const hasLogin = Array.isArray(cfg?.apps) && cfg.apps.some(app => Array.isArray(app.users) && app.users.length > 0);
+    if (hasLogin) {
+      delete env.LARKSUITE_CLI_USER_ACCESS_TOKEN;
+      delete env.LARKSUITE_CLI_APP_ID;
+      delete env.LARKSUITE_CLI_BRAND;
+      return env;
+    }
+  } catch { /* 无持久登录配置，继续走兜底逻辑 */ }
+
+  // 2) 兜底：使用保存的临时 token
+  const filePath = path.join(cliDir, 'trae-credentials.json');
   let saved = null;
   try {
     saved = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -196,8 +224,9 @@ function resolveLarkEnv() {
 function runLarkCli(args) {
   return new Promise((resolve, reject) => {
     const child = spawn(resolveLarkCli(), args, { windowsHide: true, env: resolveLarkEnv() });
-    let stdout = '';
-    let stderr = '';
+    // 同 readBody：累积原始字节后统一解码，避免中文被 chunk 边界截断成 U+FFFD
+    const outChunks = [];
+    const errChunks = [];
     let settled = false;
 
     const timer = setTimeout(() => {
@@ -207,8 +236,8 @@ function runLarkCli(args) {
       reject(new Error('飞书接口调用超时（60 秒）'));
     }, 60000);
 
-    child.stdout.on('data', chunk => { stdout += chunk; });
-    child.stderr.on('data', chunk => { stderr += chunk; });
+    child.stdout.on('data', chunk => { outChunks.push(chunk); });
+    child.stderr.on('data', chunk => { errChunks.push(chunk); });
     child.on('error', err => {
       if (settled) return;
       settled = true;
@@ -219,7 +248,7 @@ function runLarkCli(args) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      const raw = (stdout || stderr).trim();
+      const raw = (Buffer.concat(outChunks).toString('utf8') || Buffer.concat(errChunks).toString('utf8')).trim();
       let json = null;
       try {
         json = JSON.parse(raw);
@@ -424,9 +453,35 @@ const server = http.createServer(async (req, res) => {
       }
 
       const sheet = result.json.data?.spreadsheet || {};
+
+      // 建表后自动把链接分享设为「组织内获得链接的人可阅读」：
+      // 飞书新表格默认未开放链接分享，别人直接打开会提示无权限
+      let permission = { ok: false, error: '' };
+      if (sheet.spreadsheet_token) {
+        try {
+          const perm = await runLarkCli([
+            'drive', 'permission.public', 'patch',
+            '--params', JSON.stringify({ token: sheet.spreadsheet_token, type: 'sheet' }),
+            '--data', JSON.stringify({ link_share_entity: 'tenant_readable' }),
+            '--as', 'user',
+            '--yes'
+          ]);
+          if (perm.json?.ok === true) {
+            permission = { ok: true, error: '' };
+            console.log(`[飞书] 已设为组织内可阅读: ${sheet.spreadsheet_token}`);
+          } else {
+            permission = { ok: false, error: perm.json?.error?.message || perm.raw || `飞书 CLI 退出码 ${perm.code}` };
+            console.warn('[飞书] 设置表格权限失败:', permission.error);
+          }
+        } catch (err) {
+          permission = { ok: false, error: err.message };
+          console.warn('[飞书] 设置表格权限异常:', permission.error);
+        }
+      }
+
       console.log(`[飞书] 已生成表格: ${sheet.url || sheet.spreadsheet_token} (${title})`);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({ ok: true, url: sheet.url, token: sheet.spreadsheet_token }));
+      res.end(JSON.stringify({ ok: true, url: sheet.url, token: sheet.spreadsheet_token, permission }));
       return;
     }
 

@@ -1,6 +1,6 @@
 // 图片导出：把当前日历课表（已按班级/师资筛选）渲染为 PNG 图片
 import html2canvas from 'html2canvas';
-import { MONTHS, WEEKDAYS } from '../config/constants.js';
+import { MONTHS, WEEKDAYS_MON_FIRST } from '../config/constants.js';
 import { fillMonthGrid } from '../render/calendar.js';
 
 /**
@@ -43,7 +43,11 @@ function buildExportContainer(state) {
   title.textContent = `${year}年${MONTHS[month]} 课表`;
   const subtitle = document.createElement('div');
   subtitle.className = 'calendar-subtitle';
-  subtitle.textContent = `班级：${state.selectedClass || '全部班级'} ｜ 师资：${state.selectedTeacher || '全部师资'}`;
+  const classLabel = (state.selectedClasses && state.selectedClasses.length)
+    ? state.selectedClasses.join('、') : '全部班级';
+  const teacherLabel = (state.selectedTeachers && state.selectedTeachers.length)
+    ? state.selectedTeachers.join('、') : '全部师资';
+  subtitle.textContent = `班级：${classLabel} ｜ 师资：${teacherLabel}`;
   header.appendChild(title);
   header.appendChild(subtitle);
 
@@ -52,7 +56,7 @@ function buildExportContainer(state) {
 
   const weekdays = document.createElement('div');
   weekdays.className = 'weekdays';
-  WEEKDAYS.forEach(label => {
+  WEEKDAYS_MON_FIRST.forEach(label => {
     const el = document.createElement('div');
     el.className = 'weekday';
     el.textContent = label;

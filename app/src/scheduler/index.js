@@ -8,18 +8,17 @@
 //     限定在该合班课日期之前排课（从本月初到第一个合班课日期前一天），
 //     其余课程通过班级冲突检测避开合班课日期
 import { durationToMinutes, timeToMinutes, minutesToTime } from '../utils/dateUtils.js';
-import { splitClassTypes, normalizeClassType } from '../utils/classType.js';
-import { isMergeCourse, analyzeSheetForms, buildFormMap } from '../utils/sheetForm.js';
-import { MIN_GAP, AVAIL_REMOVE_PAD, AVAIL_REMOVE_PAD_TEACHER } from './constants.js';
-import { createScheduleContext, registerSlot, registerPresetClassSlots, hasAnyFeasibleSlot, buildTeacherClassAvailability, cloneContext, slotWithinAvailability, hasConflict } from './scheduleContext.js';
+import { splitClassTypes } from '../utils/classType.js';
+import { isMergeCourse, mergeKeyOf, analyzeSheetForms, buildFormMap } from '../utils/sheetForm.js';
+import { AVAIL_REMOVE_PAD, AVAIL_REMOVE_PAD_TEACHER } from './constants.js';
+import { createScheduleContext, registerSlot, registerPresetClassSlots, hasAnyFeasibleSlot, buildTeacherClassAvailability, cloneContext, slotWithinAvailability, hasConflict, hasTeacherClassOnDate } from './scheduleContext.js';
 import { tryScheduleCourse } from './trySchedule.js';
 import { findBestDispersionPlan } from './dispersion.js';
 import { getSubjectOfTeacher, getSubjectPriority, isAvailabilityClassConflict, isSubjectConflict, inferPresetSubject } from '../config/constants.js';
 
-// v5.75：合班课跨子表对齐键 —— 班级名称（班型）一致 + 课程名称一致 才视为同一门合班课
-// （此前为「课程名称|师资」；班型经 normalizeClassType 规范化，班级顺序不同（如
-// 「27OMO,28OMO」与「28OMO,27OMO」）也视为同一班型）
-const getMergeKey = (item) => `${item.courseName}|${normalizeClassType(item.classType)}`;
+// v6.1：合班课识别与跨子表对齐键 —— 6 字段（班型 / 课程名称 / 师资名称 / 时长 / 起始日期 / 终止日期）
+// 全部一致才视为同一门合班课（跨子表），识别规则单一来源：utils/sheetForm.js 的 mergeKeyOf。
+const getMergeKey = mergeKeyOf;
 
 /**
  * 计算师资难易程度与师资理论排课次序（v5.11 难易程度评估 + v5.25 科目师资表，v5.36 重新接入排课）
@@ -89,6 +88,9 @@ export function formatDifficulty(d) {
  * @param {'simulation-first'|'legacy'} [options.scheduleMode] 排课模式（默认 simulation-first）：
  *        simulation-first = 13 种策略模拟选优后直接作为最终排课结果（校验失败再逐课兜底）；
  *        legacy = 仅用模拟锚点作为偏好，逐课重排（v5.99 之前行为）
+ * @param {Object} [options.sheetOrderOverride] 同师资子表顺序覆盖（v6.0.15，重排重试驱动用）：
+ *        形如 { [师资名]: [子表名, ...] }；命中该师资时按其给定顺序排课，
+ *        未出现在名单中的子表按默认相对顺序追加到该师资组末尾；未命中师资不受影响。
  * @returns {{
  *   ok: boolean,
  *   error?: string,
@@ -103,6 +105,8 @@ export function generateSchedule(state, options = {}) {
   const { availabilityData, courseSystemData } = state;
   const scheduleMode = options.scheduleMode || state.scheduleMode || 'simulation-first';
   const useSimulationFirst = scheduleMode !== 'legacy';
+  // v6.0.15：同师资子表顺序覆盖（重排重试驱动用），形如 { 师资名: [子表名, ...] }
+  const sheetOrderOverride = options.sheetOrderOverride || null;
 
   if (!availabilityData || availabilityData.length === 0) {
     return { ok: false, error: '请先上传师资空闲时间表' };
@@ -166,9 +170,11 @@ export function generateSchedule(state, options = {}) {
   const teacherRankIndex = new Map(teacherRanking.map((r, i) => [r.teacher, { ...r, order: i + 1 }]));
 
   // ================================================================
-  // 3. 合班课识别 + 子表形态判定（v5.27/v5.30/v5.83）：
-  //    isMergeCourse 判定已抽离到 utils/sheetForm.js（识别规则同 v5.27/v5.30，
-  //    index.js / dispersion.js / 上传页解析共用同一实现）。
+  // 3. 合班课识别 + 子表形态判定（v6.1）：
+  //    合班课识别（v6.1 重定义）：只有「不同子表」中某个课节的 6 字段
+  //    （班型 / 课程名称 / 师资名称 / 时长 / 起始日期 / 终止日期）全部一致才算合班课；
+  //    由 analyzeSheetForms → buildMergeIndex 在排课之前一次性配对、在课程行上打标记
+  //    （item.mergeCourseKey），index.js / dispersion.js / 上传页解析共用同一实现。
   //    子表形态 = 按子表内课程行序（orderInSheet）静态判定（不依赖排课过程）：
   //      先分后合 pre-merge（普通课在首个合班课之前）→ 既有三约束
   //         （尾段预留 tailReserve / 合班课之后截断 cutAfter / 日期上界 latestDate）
@@ -178,7 +184,7 @@ export function generateSchedule(state, options = {}) {
   //         （排课报告第八章 + 上传课程体系表页面标红）
   //      none（无合班课）→ 约束保持原样；全合班课子表 → 归入 post-merge（约束无害）
   // ================================================================
-  const { forms: sheetForms, mixedSheets } = analyzeSheetForms(newCourseSystemData);
+  const { forms: sheetForms, mixedSheets, mergeIndex } = analyzeSheetForms(newCourseSystemData);
   const sheetFormMap = buildFormMap(sheetForms);
 
   // ================================================================
@@ -257,6 +263,23 @@ export function generateSchedule(state, options = {}) {
   for (const r of teacherRanking) {
     const sheets = sheetsByOwner.get(r.teacher);
     if (!sheets || sheets.length === 0) continue;
+    // v6.0.15：同师资子表顺序覆盖 —— 命中该师资时按指定子表名顺序排列，
+    // 未出现在覆盖名单中的子表按默认相对顺序追加到该师资组末尾；
+    // 用于「某子表第③步无解时，重排同师资子表再排课」的重试驱动。
+    const override = sheetOrderOverride && sheetOrderOverride[r.teacher];
+    if (Array.isArray(override) && override.length > 0) {
+      const remaining = new Map(sheets.map(s => [s.sheetName, s]));
+      const ordered = [];
+      for (const name of override) {
+        const s = remaining.get(name);
+        if (s) { ordered.push(s); remaining.delete(name); }
+      }
+      for (const s of sheets) {
+        if (remaining.has(s.sheetName)) { ordered.push(s); remaining.delete(s.sheetName); }
+      }
+      sortedSheets.push(...ordered);
+      continue;
+    }
     sheets.sort((a, b) => {
       // v5.88：时间密度 L = M/N 升序（单位课程可用天数越少越紧张，越优先排课）；
       // L 相同 → 课程数量降序；再相同 → 子表出现顺序。L = ∞ 的子表自然排最后。
@@ -287,6 +310,15 @@ export function generateSchedule(state, options = {}) {
     // 逐子表记录（含合班课数 / 首个合班课之前的普通课数 / 末个合班课之后的普通课数 / 原因），
     // 供排课报告第八章展示报错
     mixedSheets: [],
+    // v6.1：跨子表合班课识别结果（排课前构建，供报告「合班组 / 含合班课子表」章节展示）——
+    //   mergeGroups：每个跨子表合班组一条（6 字段键 + 课节信息 + 涉及子表，按默认顺序）；
+    //   mergeSheets：含合班课的子表（标注）+ 其合班对子表与涉及合班组数。
+    mergeGroups: mergeIndex.mergeGroups,
+    mergeSheets: [...mergeIndex.sheetMergeInfo.entries()].map(([sheetName, info]) => ({
+      sheetName,
+      mergePeers: [...info.mergePeers].sort(),
+      mergeGroupCount: info.groupKeys.size
+    })),
     schedulingOrder: sortedSheets.map(s => `${s.sheetName}(${s.courses.length}门, M=${s.m ?? '—'}, L=${formatL(s.l)})`),
     // v5.36：师资难易程度评估 + 师资理论排课次序（先科目，科目内难易程度降序）
     teacherOrder: teacherRanking.map((r, i) => ({
@@ -354,6 +386,9 @@ export function generateSchedule(state, options = {}) {
         aligned: 0,
         failed: sheet.courses.length,
         teachers: [...new Set(sheet.courses.map(c => c.teacher))],
+        // v6.0.15：子表主师资与形态，供同师资子表重排重试驱动分组使用
+        owner: sheet.owner,
+        form: 'mixed',
         mixed: true,
         mergeCount: mixRec.mergeCount,
         preCount: mixRec.preCount,
@@ -559,37 +594,66 @@ export function generateSchedule(state, options = {}) {
       }
     }
 
-    // v6.0 simulation-first：模拟方案校验（在 ctx 副本上按行序重放），
-    // 通过则本轮直接按模拟槽位落账；未通过 / 无方案则整表降级为逐课兜底。
+    // v6.0 simulation-first 宏观第①②步：模拟方案校验（在 ctx 副本上按行序重放），
+    // 通过则本轮直接按模拟槽位落账。
+    // v6.0.7 宏观第③步：第①②步未通过时，忽略整日封锁重新执行 13 策略模拟并选优，
+    // 校验通过则整表直接落账；仍无解 → 本子表整表报告失败（不再逐课兜底）。
     let planVerified = false;
-    let planValidation = { verified: false, reason: '未生成模拟方案', strategy: null };
+    let planRelaxed = false; // v6.0.7：是否由宏观第③步（忽略整日封锁的 13 策略模拟）直接落账
+    let planValidation = { verified: false, reason: '未生成模拟方案', strategy: null, relaxed: false };
+    const verifyEntry = (entry, allowSameDay) => {
+      const v = verifySimulatedPlan({
+        baseCtx: ctx,
+        sheet,
+        planSlots: entry.rawSlots,
+        monthAvailability,
+        tailReserve,
+        headReserve,
+        sheetCutAfter,
+        sheetCutBefore,
+        mergedScheduleMap,
+        mergeUpperBefore,
+        mergeLowerAfter,
+        allowSameDay
+      });
+      return { verified: v.verified, reason: v.reason || '', strategy: entry.selectedStrategy || null, relaxed: allowSameDay };
+    };
     if (useSimulationFirst) {
+      // —— 第①步：严格 13 策略模拟（已在子表排课前 buildDispersionPlans 生成）——
       const entry = dispersionPlans.get(sheet.sheetName);
       if (entry && Array.isArray(entry.rawSlots) && entry.rawSlots.length > 0) {
-        const v = verifySimulatedPlan({
-          baseCtx: ctx,
-          sheet,
-          planSlots: entry.rawSlots,
-          monthAvailability,
-          tailReserve,
-          headReserve,
-          sheetCutAfter,
-          sheetCutBefore,
-          mergedScheduleMap,
-          mergeUpperBefore,
-          mergeLowerAfter
-        });
+        const v = verifyEntry(entry, false);
         planVerified = v.verified;
-        planValidation = {
-          verified: v.verified,
-          reason: v.reason || '',
-          strategy: entry.selectedStrategy || null
-        };
+        planValidation = v;
         if (!v.verified) {
-          console.warn(`  [模拟方案校验] ${sheet.sheetName} 未通过（${v.reason}），降级为逐课兜底`);
+          console.warn(`  [模拟方案校验·第②步] ${sheet.sheetName} 未通过（${v.reason}），进入宏观第③步（忽略整日封锁重排）`);
         }
       } else {
-        planValidation.reason = '无可用的模拟槽位（模拟无解），降级为逐课兜底';
+        planValidation.reason = '第①步 13 策略模拟无解';
+      }
+      // —— 第③步：忽略整日封锁，基于排课瞬间的师资-班级空闲时间表重做 13 策略模拟并选最优 ——
+      if (!planVerified) {
+        const relaxedPlans = buildDispersionPlans(
+          newCourseSystemData, monthAvailability, allMonthDates, ctx, tailReserve,
+          sheet.sheetName, sheetCutAfter, mergedScheduleMap, headReserve, sheetCutBefore, true
+        );
+        const relEntry = relaxedPlans.get(sheet.sheetName);
+        if (relEntry && Array.isArray(relEntry.rawSlots) && relEntry.rawSlots.length > 0) {
+          const rv = verifyEntry(relEntry, true);
+          if (rv.verified) {
+            planVerified = true;
+            planRelaxed = true;
+            dispersionPlans.set(sheet.sheetName, relEntry);
+            planValidation = rv;
+            console.log(`  [宏观第③步] ${sheet.sheetName} 忽略整日封锁的 13 策略模拟通过（策略 ${rv.strategy}），整表直接落账`);
+          } else {
+            planValidation = { verified: false, reason: `忽略整日封锁模拟仍未通过：${rv.reason}`, strategy: rv.strategy, relaxed: true };
+            console.warn(`  [宏观第③步] ${sheet.sheetName} 忽略整日封锁仍不可行（${rv.reason}）→ 整表报告失败`);
+          }
+        } else {
+          planValidation = { verified: false, reason: '忽略整日封锁的 13 策略模拟无解', strategy: null, relaxed: true };
+          console.warn(`  [宏观第③步] ${sheet.sheetName} 忽略整日封锁的 13 策略模拟无解 → 整表报告失败`);
+        }
       }
     } else {
       planValidation.reason = 'legacy 模式：模拟方案仅作锚点偏好';
@@ -695,27 +759,36 @@ export function generateSchedule(state, options = {}) {
       // 本子表首次定日期时其日期尚未确定），仅普通课的候选时间域收缩到最后一个合班课之后
       const courseCutBefore = isMergeCourse(courseItem) ? null : sheetCutBefore;
       // v5.82：跨子表合班课推进已移除（见上方 prevDate 注释），v5.72「跨表分量逐天放松」
-      // 降级不启用；第一阶段失败直接进入第二阶段补排兜底。
-      // v6.0 simulation-first：模拟方案已整表校验通过 → 直接取该课模拟槽位落账；
-      // 未通过校验 / 无模拟方案时走 legacy 逐课排课兜底。
+      // 降级不启用；第一阶段失败直接进入第三阶段兜底放宽（v6.0.5 起不再有第二阶段补排）。
+      // v6.0 simulation-first：模拟方案已整表校验通过（第①步严格模拟 或 第③步忽略整日封锁模拟）
+      // → 直接取该课模拟槽位落账；无槽位即整表失败（不再逐课兜底）。legacy 模式走逐课排课。
       let slot = null;
       let slotSource = 'fallback';
       if (useSimulationFirst && planVerified && planEntry && Array.isArray(planEntry.rawSlots)) {
         const planned = planEntry.rawSlots[planEntry.index];
         if (planned && planned.date && planned.startTime && planned.endTime) {
           slot = { date: planned.date, startTime: planned.startTime, endTime: planned.endTime };
-          slotSource = 'simulation';
-          step.phase = 'simulation';
-          // 排课轨迹：记录落账瞬间的师资-班级空闲表（与 scheduleCourse 同口径）
+          // v6.0.7：区分第①步（严格模拟）与第③步（忽略整日封锁模拟）落账来源
+          slotSource = planRelaxed ? 'simulation-relaxed' : 'simulation';
+          step.phase = planRelaxed ? 'simulation-relaxed' : 'simulation';
+          // 排课轨迹：记录落账瞬间的师资-班级空闲表（与 scheduleCourse 同口径）。
+          // v6.1：整日封锁并入空闲表本身 —— 第①步（严格模拟，planRelaxed=false）剔除被整日封锁
+          //       的日期并记录到 dayLockedDates（供报告标注）；第③步（忽略整日封锁，planRelaxed=true）
+          //       保留这些整日，dayLockedDates 为空、报告不标注。
+          const dayLockedDates = [];
           step.availability = buildTeacherClassAvailability(monthAvailability, courseItem.teacher, courseItem.classType, ctx, {
             ...(tailReserve ? { tailReserve } : {}),
             ...(courseCutAfter ? { cutAfter: courseCutAfter } : {}),
             ...(headReserve ? { headReserve } : {}),
-            ...(courseCutBefore ? { cutBefore: courseCutBefore } : {})
+            ...(courseCutBefore ? { cutBefore: courseCutBefore } : {}),
+            allowSameDay: planRelaxed,
+            dayLockedDates
           }).map(a => ({ ...a }));
+          step.dayLockedDates = dayLockedDates;
         }
       }
-      if (!slot) {
+      // v6.0.7：simulation-first 下模拟方案即最终结果 —— 无模拟槽位即整表失败，不再逐课兜底。
+      if (!slot && !useSimulationFirst) {
         slot = scheduleCourse(ctx, courseItem, monthAvailability, prevDate, latestDate, isMergeCourse(courseItem), reserveAfter, step, preferredSlot, tailReserve, courseCutAfter, earliestDate, headReserve, courseCutBefore);
       }
       // v5.57：记录本子表第一门实际排课（非对齐）课程排课瞬间的师资-班级空闲时间表快照，
@@ -730,9 +803,11 @@ export function generateSchedule(state, options = {}) {
           courseName: courseItem.courseName,
           classType: courseItem.classType,
           teacher: courseItem.teacher,
-          status: slot ? 'scheduled' : (step.phase === 'makeup' ? 'makeup-failed' : 'failed'),
+          status: slot ? 'scheduled' : 'failed',
           slot: slot ? { date: slot.date, startTime: slot.startTime, endTime: slot.endTime } : null,
           availability: (step.availability || []).map(a => ({ ...a })),
+          // v6.1：被整日封锁而移出空闲表的日期（第①步 / legacy 严格路径记录；第③步忽略封锁时为空）
+          dayLockedDates: (step.dayLockedDates || []).slice(),
           cutAfter: courseCutAfter ? { ...courseCutAfter } : null,
           // v5.83：先合后分侧镜像记录（头段预留 + 合班课之前截断）
           cutBefore: courseCutBefore ? { ...courseCutBefore } : null,
@@ -809,8 +884,8 @@ export function generateSchedule(state, options = {}) {
         step.status = 'scheduled';
         step.slot = { date: slot.date, startTime: slot.startTime, endTime: slot.endTime };
         step.slotSource = slotSource;
-        if (slotSource === 'simulation') step.note = '模拟方案直接落账';
-        else if (useSimulationFirst) step.note = '模拟方案未采用，逐课兜底';
+        if (slotSource === 'simulation') step.note = '第①②步严格模拟方案直接落账';
+        else if (slotSource === 'simulation-relaxed') step.note = '第③步忽略整日封锁的模拟方案直接落账';
         if (isMergeCourse(courseItem)) {
           mergedScheduleMap.set(mergeKey, {
             date: slot.date,
@@ -829,7 +904,10 @@ export function generateSchedule(state, options = {}) {
       } else {
         sheetFailed++;
         step.status = 'failed';
-        step.note = '因无师资-课程空闲时间，排课失败';
+        // v6.0.7：simulation-first 下整表模拟（含第③步忽略整日封锁）失败 → 报告失败原因
+        step.note = useSimulationFirst
+          ? `模拟排课失败（${planValidation.reason || '无可行的模拟方案'}）`
+          : '因无师资-课程空闲时间，排课失败';
       }
       reportSteps.push(step);
     }
@@ -850,8 +928,16 @@ export function generateSchedule(state, options = {}) {
       aligned: sheetAligned,
       failed: sheetFailed,
       teachers: [...new Set(sheet.courses.map(c => c.teacher))],
+      // v6.0.15：子表主师资与形态，供同师资子表重排重试驱动分组使用
+      owner: sheet.owner,
+      form,
+      // v6.1：含合班课子表标注 + 其合班对子表（跨子表 6 字段一致判定，见 diagnostics.mergeGroups）
+      hasMerge: Boolean(mergeIndex.sheetMergeInfo.get(sheet.sheetName)?.hasMerge),
+      mergePeers: [...(mergeIndex.sheetMergeInfo.get(sheet.sheetName)?.mergePeers || [])].sort(),
       // v6.0：模拟方案校验结果（是否直接落账 / 降级兜底原因 / 选中策略）
+      // v6.0.7：simulationRelaxed = 是否由宏观第③步（忽略整日封锁的 13 策略模拟）直接落账
       planValidation,
+      simulationRelaxed: planRelaxed,
       dispersionPlan: sheetPlanEntry && sheetPlanEntry.candidates
         ? {
             totalCourses: sheetPlanEntry.totalCourses ?? sheet.courses.length,
@@ -1077,7 +1163,7 @@ function getMonthDates(currentDate, availabilityData, courseSystemData) {
  *        用于把本子表内已定日期合班课作为硬性槽位约束纳入模拟排课
  * @returns {Map<string, {dates: string[], index: number}>} key = sheetName
  */
-function buildDispersionPlans(newCourseSystemData, monthAvailability, allMonthDates, ctx = null, tailReserve = null, onlySheetName = null, cutAfter = null, mergedScheduleMap = null, headReserve = null, cutBefore = null) {
+function buildDispersionPlans(newCourseSystemData, monthAvailability, allMonthDates, ctx = null, tailReserve = null, onlySheetName = null, cutAfter = null, mergedScheduleMap = null, headReserve = null, cutBefore = null, allowSameDay = false) {
   const plans = new Map();
   const groups = new Map();
   for (const c of newCourseSystemData) {
@@ -1116,7 +1202,7 @@ function buildDispersionPlans(newCourseSystemData, monthAvailability, allMonthDa
         const m = mergedScheduleMap.get(k);
         return m ? { date: m.date, startTime: m.startTime, endTime: m.endTime } : null;
       });
-      const plan = findBestDispersionPlan(availableDates, courses.length, courses[0].teacher, monthAvailability, allMonthDates, rangeStart, rangeEnd, courses, ctx, tailReserve, cutAfter, fixedMergeSlots, headReserve, cutBefore);
+      const plan = findBestDispersionPlan(availableDates, courses.length, courses[0].teacher, monthAvailability, allMonthDates, rangeStart, rangeEnd, courses, ctx, tailReserve, cutAfter, fixedMergeSlots, headReserve, cutBefore, allowSameDay);
       if (plan && plan.primary) {
         // v5.52：候选方案明细（各策略评分 + 维度详情 + 模拟槽位序列）随锚点一起保留，
         // 供排课报告展示「各分散策略详情与评分 + 模拟日历表」（candidates 为模拟阶段的方案，
@@ -1258,15 +1344,18 @@ function isRelevantExcludedCourse(course, courseItem, tailReserve, headReserve =
  * 在全局 ctx 的副本上按子表行序重放模拟槽位，逐课校验
  *   ① 槽位完整（date/startTime/endTime）；② 落在课程区间与日期上下界内；
  *   ③ 满足「同班课程日期严格递增」；④ 槽位在师资原始空闲/排课时刻师资-班级空闲表内；
- *   ⑤ 与重放出的已排课程无冲突（minGap=0，与模拟口径一致）。
+ *   ⑤ 与重放出的已排课程无冲突（minGap=AVAIL_REMOVE_PAD_TEACHER（Y），与模拟口径一致）。
  * 任一项不通过即整体降级为逐课兜底，避免把不可行方案写进真实占用账本。
+ * @param {boolean} [allowSameDay=false] v6.0.7：忽略「同一师资+同一班级每天至多一节」整日硬约束
+ *        （宏观第③步忽略整日封锁的模拟方案校验），与 simulateScheduleOnce 的 allowSameDay 口径一致。
  * @returns {{verified: boolean, reason: string}}
  */
 function verifySimulatedPlan({
   baseCtx, sheet, planSlots, monthAvailability,
   tailReserve = null, headReserve = null,
   sheetCutAfter = null, sheetCutBefore = null,
-  mergedScheduleMap, mergeUpperBefore, mergeLowerAfter
+  mergedScheduleMap, mergeUpperBefore, mergeLowerAfter,
+  allowSameDay = false
 }) {
   const replay = cloneContext(baseCtx);
   const prevByClass = {};
@@ -1321,7 +1410,9 @@ function verifySimulatedPlan({
       ...(tailReserve ? { tailReserve } : {}),
       ...(cutAfter ? { cutAfter } : {}),
       ...(headReserve ? { headReserve } : {}),
-      ...(cutBefore ? { cutBefore } : {})
+      ...(cutBefore ? { cutBefore } : {}),
+      // v6.1：校验的空闲表口径与模拟一致（第①步 allowSameDay=false 剔除整日封锁 / 第③步 true 保留）
+      allowSameDay
     });
     const s = timeToMinutes(slot.startTime);
     const e = timeToMinutes(slot.endTime);
@@ -1333,7 +1424,7 @@ function verifySimulatedPlan({
     }
     if (hasConflict(replay, {
       teacher: c.teacher, classType: c.classType,
-      date: slot.date, slotStart: s, slotEnd: e, minGap: 0
+      date: slot.date, slotStart: s, slotEnd: e, minGap: AVAIL_REMOVE_PAD_TEACHER, allowSameDay
     })) {
       return { verified: false, reason: `第 ${idx + 1} 课「${c.courseName}」槽位与已排课程冲突` };
     }
@@ -1348,7 +1439,8 @@ function verifySimulatedPlan({
 
 /**
  * 排单门课程：先按「师资-班级空闲时间表」正常排课（日期递增保证子表内行顺序），
- * 失败后补排（跳过分散度，使用原始空闲时间，hasConflict 兜底检测冲突）
+ * 失败后进入兜底放宽（放宽「同一师资+同一班级每天至多一节」整日硬约束；
+ * v6.0.5 起移除原第二阶段「补排」中间层，第一阶段失败直接进入兜底放宽）
  * @param {string|null} prevDate 日期递增下界
  * @param {string|null} latestDate 日期上界（v5.34：后子表合班课之前的普通课限定在合班课日期之前）
  * @param {boolean} earliestFirst 尽早优先（v5.34.1：合班课优先排早，避免被晚间时段偏好拖到月末）
@@ -1380,14 +1472,20 @@ function scheduleCourse(ctx, courseItem, monthAvailability, prevDate, latestDate
   // v5.59：本子表含有已排日期合班课时，截断该合班课开始时间 − AVAIL_REMOVE_PAD 之后的所有碎片；
   // v5.83：先合后分侧镜像 —— 扣头段日期中其他班级已排时间（headReserve）、截断最后一个合班课
   //   结束时间 + AVAIL_REMOVE_PAD 之前的所有碎片（cutBefore，与截断链式叠加））
+  const dayLockedDates = [];
   const teacherClassAvailability = buildTeacherClassAvailability(monthAvailability, teacher, classType, ctx, {
     ...(tailReserve ? { tailReserve } : {}),
     ...(cutAfter ? { cutAfter } : {}),
     ...(headReserve ? { headReserve } : {}),
-    ...(cutBefore ? { cutBefore } : {})
+    ...(cutBefore ? { cutBefore } : {}),
+    // v6.1：legacy 第一阶段（严格）口径——剔除被整日封锁的日期并记录（供报告标注）
+    dayLockedDates
   });
   // 排课轨迹：保留「排课时刻的师资-班级空闲时间表」快照（供生成排课报告）
-  if (trace) trace.availability = teacherClassAvailability.map(a => ({ ...a }));
+  if (trace) {
+    trace.availability = teacherClassAvailability.map(a => ({ ...a }));
+    trace.dayLockedDates = dayLockedDates;
+  }
   if (teacherClassAvailability.length === 0) return null;
 
   // 临时上下文：用师资-班级空闲时间表替换 monthAvailability，日程映射与全局 ctx 共享
@@ -1408,35 +1506,37 @@ function scheduleCourse(ctx, courseItem, monthAvailability, prevDate, latestDate
     console.log(`  可行日期(${feasibleDates.length}): ${feasibleDates.join(', ')}`);
   }
 
-  // 第一阶段：正常排课（间隔统一 MIN_GAP，保留分散度奖励与时段偏好；
+  // 第一阶段：正常排课（同一师资间隔全局统一 AVAIL_REMOVE_PAD_TEACHER（Y，缺省 30 分钟），
+  // 保留分散度奖励与时段偏好；v6.0.6 起原独立常量 MIN_GAP=10 已删除——本阶段与第三阶段、
+  // 模拟枚举 / 整表校验同取 Y；
   // 原六级「仅晚上/所有空闲 × 10/5/0 分钟间隔」回退经后台真实数据验证 2-6 级从未触发，
   // 且 useEveningOnly 从未被读取，「仅晚上」语义实际由 timePriority.js 时间分数权重承载）
   // v5.34.2：reserveAfter 作为「日期预算硬约束」下传给 tryScheduleCourse——
   // 候选日期之后可用日期数不足（排不完本课及后续同师资课程）时禁选该日期。
-  const slot = tryScheduleCourse(teacherCtx, courseItem, teacher, feasibleDates, MIN_GAP, prevDate, allTeacherDates, preferredSlot, latestDate, earliestFirst, reserveAfter, earliestDate);
+  const slot = tryScheduleCourse(teacherCtx, courseItem, teacher, feasibleDates, AVAIL_REMOVE_PAD_TEACHER, prevDate, allTeacherDates, preferredSlot, latestDate, earliestFirst, reserveAfter, earliestDate);
   if (slot) {
     if (trace) trace.phase = 'normal';
     return slot;
   }
 
-  // 第二阶段：补排（使用原始空闲时间，hasConflict 兜底检测冲突）
-  const allDates = [...new Set(monthAvailability.filter(a => a.teacher === teacher).map(a => a.date))].sort();
-  const makeupSlot = tryScheduleCourse(ctx, courseItem, teacher, allDates, MIN_GAP, prevDate, [], preferredSlot, latestDate, earliestFirst, reserveAfter, earliestDate);
-  if (makeupSlot) {
-    if (trace) trace.phase = 'makeup';
-    return makeupSlot;
-  }
-
-  // 第三阶段：兜底放宽（仅第一、二阶段均失败时执行）。
+  // 第三阶段：兜底放宽（第一阶段失败后直接执行）。
+  // v6.0.5：移除原「第二阶段补排（makeup）」——不再用原始空闲时间做中间层兜底，
+  // 第一阶段失败后直接进入本阶段。
   // 放宽「同一师资+同一班级每天只能排一节课」整日硬约束（allowSameDay=true），
   // 使同一天不同时段可再排一节；师资间隔提高到 AVAIL_REMOVE_PAD_TEACHER（30 分钟），
   // 班级间隔仍为 CLASS_MIN_GAP（5 分钟，由 hasConflict 内部承担）。
-  // 因本阶段排在第二阶段（在更松的约束下已穷尽所有「不同天」候选）之后，
-  // 它相对第二阶段仅多开「日封锁」一个维度，故只会贡献「同天」槽位——
-  // 天然保证「优先不同天、排不下才同天」，不会抢走本可排在不同天的日期。
+  const allDates = [...new Set(monthAvailability.filter(a => a.teacher === teacher).map(a => a.date))].sort();
   const relaxedSlot = tryScheduleCourse(ctx, courseItem, teacher, allDates, AVAIL_REMOVE_PAD_TEACHER, prevDate, [], preferredSlot, latestDate, earliestFirst, reserveAfter, earliestDate, true);
   if (relaxedSlot) {
-    if (trace) trace.phase = 'fallback-same-day';
+    // v6.0.5：区分「真同天兜底」与「放宽间隔后落在不同天」——
+    // 移除第二阶段后，本阶段紧跟第一阶段执行，其候选域（ctx 原始空闲表）比第一阶段
+    // （teacherCtx，已扣除尾/头段预留与合班课截断）更宽，可能在某「干净日」（该师资+班级
+    // 当日尚无课）上找到槽位；仅当该槽与「同一师资+同一班级」当日已有课程同天时才是同天兜底。
+    if (trace) {
+      trace.phase = hasTeacherClassOnDate(ctx, { teacher, classType, date: relaxedSlot.date })
+        ? 'fallback-same-day'
+        : 'fallback-relaxed';
+    }
     return relaxedSlot;
   }
 

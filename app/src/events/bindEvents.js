@@ -4,7 +4,7 @@ import {
   addAvailabilityFile, addCourseSystemFile, addPresetFile, setUploadStatus, runSchedule,
   deleteAvailabilityFile, deleteCourseSystemFile, deletePresetFile,
   deleteAvailabilityItem, deleteCourseSystemItem, deletePresetItem, deleteScheduledCourse,
-  toggleSection, toggleFile, setSelectedClass, setSelectedTeacher, toggleShowAvailability
+  toggleSection, toggleFile, setSelectedClasses, setSelectedTeachers, toggleShowAvailability, toggleAbbreviateClass
 } from '../state/store.js';
 import { parseAvailabilitySheet, parseCourseSystemSheet, parsePresetSheet } from '../utils/excelParser.js';
 import { exportScheduledToExcel, exportAvailabilityToExcel } from '../utils/excelExporter.js';
@@ -12,9 +12,61 @@ import { parseRequirements, generateAvailability } from '../utils/availabilityGe
 import { exportCalendarImage } from '../utils/imageExporter.js';
 import { exportCalendarToFeishu, showFeishuNotice } from '../utils/feishuExporter.js';
 
+// ============ 查看区多选筛选（班级/师资，v6.0.13） ============
+
+/** 收起所有多选筛选面板 */
+function closeAllMultiFilterPanels() {
+  ['classFilter', 'teacherFilter'].forEach(key => {
+    const panel = document.getElementById(`${key}Panel`);
+    const trigger = document.getElementById(`${key}Trigger`);
+    if (panel) panel.hidden = true;
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  });
+}
+
+/**
+ * 绑定一个多选筛选面板：触发器展开/收起（同时关闭另一面板）、勾选增删、清空。
+ * 选项与勾选态由 render/index.js 渲染，这里只负责交互与写回 store。
+ */
+function bindMultiFilter({ triggerId, panelId, optionsId, clearId, getSelected, setSelected }) {
+  const trigger = document.getElementById(triggerId);
+  const panel = document.getElementById(panelId);
+  const box = document.getElementById(optionsId);
+  const clear = document.getElementById(clearId);
+  if (!trigger || !panel || !box) return;
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = panel.hidden;
+    closeAllMultiFilterPanels();
+    panel.hidden = !willOpen;
+    trigger.setAttribute('aria-expanded', String(willOpen));
+  });
+
+  // 面板内点击不冒泡到 document（避免误关）
+  panel.addEventListener('click', (e) => e.stopPropagation());
+
+  box.addEventListener('change', (e) => {
+    const cb = e.target.closest('input[type="checkbox"]');
+    if (!cb) return;
+    const current = getSelected();
+    const next = cb.checked ? [...current, cb.value] : current.filter(v => v !== cb.value);
+    setSelected(next);
+  });
+
+  clear?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setSelected([]);
+  });
+}
+
 export function bindEvents() {
   // 初始化年月选择器
   initMonthSelector();
+
+  // 点击页面其他区域 / 按 Esc 收起多选筛选面板
+  document.addEventListener('click', closeAllMultiFilterPanels);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAllMultiFilterPanels(); });
 
   // 月份导航
   document.getElementById('prevMonthBtn')?.addEventListener('click', () => {
@@ -42,19 +94,32 @@ export function bindEvents() {
   document.getElementById('yearSelect')?.addEventListener('change', onMonthSelectorChange);
   document.getElementById('monthSelect')?.addEventListener('change', onMonthSelectorChange);
 
-  // 班级筛选变更事件
-  document.getElementById('classFilter')?.addEventListener('change', (e) => {
-    setSelectedClass(e.target.value);
+  // 班级 / 师资筛选（多选复选框下拉面板，v6.0.13）
+  bindMultiFilter({
+    triggerId: 'classFilterTrigger',
+    panelId: 'classFilterPanel',
+    optionsId: 'classFilterOptions',
+    clearId: 'classFilterClear',
+    getSelected: () => getState().selectedClasses || [],
+    setSelected: setSelectedClasses
   });
-
-  // 师资筛选变更事件
-  document.getElementById('teacherFilter')?.addEventListener('change', (e) => {
-    setSelectedTeacher(e.target.value);
+  bindMultiFilter({
+    triggerId: 'teacherFilterTrigger',
+    panelId: 'teacherFilterPanel',
+    optionsId: 'teacherFilterOptions',
+    clearId: 'teacherFilterClear',
+    getSelected: () => getState().selectedTeachers || [],
+    setSelected: setSelectedTeachers
   });
 
   // 空闲时间显示切换按钮
   document.getElementById('availabilityToggleBtn')?.addEventListener('click', () => {
     toggleShowAvailability();
+  });
+
+  // 班级缩写显示切换按钮
+  document.getElementById('classAbbrToggleBtn')?.addEventListener('click', () => {
+    toggleAbbreviateClass();
   });
 
   // 生成图片：按当前班级/师资筛选，将日历课表导出为 PNG
@@ -64,7 +129,10 @@ export function bindEvents() {
     const y = month.getFullYear();
     const m = String(month.getMonth() + 1).padStart(2, '0');
     // 文件名带上当前筛选条件（如：课表_2026年10月_高一A班_张老师.png）
-    const suffix = [state.selectedClass, state.selectedTeacher].filter(Boolean).join('_');
+    const suffix = [
+      ...(state.selectedClasses || []),
+      ...(state.selectedTeachers || [])
+    ].join('_');
     const fileName = `课表_${y}年${m}月${suffix ? '_' + suffix : ''}.png`;
     try {
       await exportCalendarImage(state, fileName);
@@ -84,8 +152,12 @@ export function bindEvents() {
     // 页面内提示条：避免 alert 被拦截/预开空白页导致“点击无反应”
     showFeishuNotice('info', '正在生成飞书表格，请稍候…');
     try {
-      const url = await exportCalendarToFeishu(getState());
-      showFeishuNotice('success', '飞书表格已生成：', url);
+      const { url, permission } = await exportCalendarToFeishu(getState());
+      if (permission && permission.ok === false) {
+        showFeishuNotice('info', `飞书表格已生成，但链接分享未开启（${permission.error}），他人可能无法打开：`, url);
+      } else {
+        showFeishuNotice('success', '飞书表格已生成（组织内获得链接的人可阅读）：', url);
+      }
       window.open(url, '_blank', 'noopener');
     } catch (error) {
       showFeishuNotice('error', `生成飞书表格失败：${error.message}`);
@@ -226,7 +298,7 @@ export function bindEvents() {
     const month = state.currentDate;
     const y = month.getFullYear();
     const m = String(month.getMonth() + 1).padStart(2, '0');
-    exportScheduledToExcel(state.courses, `排课结果_${y}年${m}月.xlsx`);
+    exportScheduledToExcel(state.courses, `排课结果_${y}年${m}月.xlsx`, state.abbreviateClass);
   });
 
   // 导出排课报告（.md）：优先导出最近一次排课的报告；若已多次排课，可保留历史报告在服务器
