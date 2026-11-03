@@ -132,6 +132,30 @@
   transform: translateY(0);
 }
 
+/* 智能排课按钮下方堆叠「调课」按钮 */
+.schedule-btn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 调课按钮：默认用次要色区分，进入/完成调课模式时高亮 */
+.schedule-btn--adjust {
+  background: var(--secondary);
+}
+
+.schedule-btn--adjust:hover {
+  background: #D97706;
+}
+
+.schedule-btn--adjust.active {
+  background: #DC2626;
+}
+
+.schedule-btn--adjust.active:hover {
+  background: #B91C1C;
+}
+
 /* ===== 删除按钮 ===== */
 .delete-btn {
   background: #FEF2F2;
@@ -639,4 +663,42 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* 调课确认对话框（窄版模态框） */
+.modal-box--narrow {
+  width: 360px;
+}
+
+.adjust-dialog__value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 8px 10px;
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* 授课开始时间：小时 + 分钟 两个下拉并排（仅列出该绿色段内的合法值） */
+.adjust-dialog__time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.adjust-dialog__sep {
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.adjust-dialog__select {
+  flex: 1;
+  min-width: 0;
+}
+
+.adjust-dialog__hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }

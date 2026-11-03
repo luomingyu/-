@@ -315,11 +315,16 @@ function buildFeishuSheetArgs(title, subtitle, weekdays, weeks) {
     });
 
     // 课程行：每行对应该周各天的第 i 节课
+    // 每格底色取该节课的科目配色（与日历课程卡片一致），收集后在通用样式之后覆盖
+    const courseCellColors = [];
     for (let i = 0; i < maxCourses; i++) {
       const r = courseStart + i;
-      values.push(days.map(d => {
+      values.push(days.map((d, index) => {
         const course = (d.courses || [])[i];
         if (!course) return '';
+        if (course.color) {
+          courseCellColors.push({ range: `${COL_LETTERS[index]}${r}`, background_color: course.color });
+        }
         return [course.className, course.lessonName, course.teacher, course.time]
           .filter(Boolean)
           .join('\n');
@@ -333,6 +338,8 @@ function buildFeishuSheetArgs(title, subtitle, weekdays, weeks) {
         horizontal_alignment: 'left', vertical_alignment: 'top',
         word_wrap: 'auto-wrap', border
       });
+      // 科目底色：放在通用课程样式之后，按格覆盖背景色
+      cellStyles.push(...courseCellColors);
     }
 
     // 非本月补位格：浅灰底 + 灰字（放在通用样式之后，覆盖生效）
@@ -454,7 +461,7 @@ const server = http.createServer(async (req, res) => {
 
       const sheet = result.json.data?.spreadsheet || {};
 
-      // 建表后自动把链接分享设为「组织内获得链接的人可阅读」：
+      // 建表后自动把链接分享设为「组织内获得链接的人可编辑」：
       // 飞书新表格默认未开放链接分享，别人直接打开会提示无权限
       let permission = { ok: false, error: '' };
       if (sheet.spreadsheet_token) {
@@ -462,13 +469,13 @@ const server = http.createServer(async (req, res) => {
           const perm = await runLarkCli([
             'drive', 'permission.public', 'patch',
             '--params', JSON.stringify({ token: sheet.spreadsheet_token, type: 'sheet' }),
-            '--data', JSON.stringify({ link_share_entity: 'tenant_readable' }),
+            '--data', JSON.stringify({ link_share_entity: 'tenant_editable' }),
             '--as', 'user',
             '--yes'
           ]);
           if (perm.json?.ok === true) {
             permission = { ok: true, error: '' };
-            console.log(`[飞书] 已设为组织内可阅读: ${sheet.spreadsheet_token}`);
+            console.log(`[飞书] 已设为组织内可编辑: ${sheet.spreadsheet_token}`);
           } else {
             permission = { ok: false, error: perm.json?.error?.message || perm.raw || `飞书 CLI 退出码 ${perm.code}` };
             console.warn('[飞书] 设置表格权限失败:', permission.error);

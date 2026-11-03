@@ -112,12 +112,26 @@ function renderAbbreviateToggle(state) {
   btn.title = on ? '点击显示班级完整列表' : '点击将班级缩写为批量简称（如 27线上所有班）';
 }
 
+/** 更新「调课」按钮文案与激活态（调课模式中显示「调课完成」） */
+function renderAdjustToggle(state) {
+  const btn = document.getElementById('adjustBtn');
+  const label = document.getElementById('adjustBtnLabel');
+  if (!btn || !label) return;
+  const on = state.adjustMode;
+  label.textContent = on ? '调课完成' : '调课';
+  btn.classList.toggle('active', on);
+  btn.title = on
+    ? '点击完成调课并输出课表'
+    : '进入调课模式：点击课程高亮关联课程，拖动课程到绿色可调时间段完成调课';
+}
+
 /** 全量重绘 */
 export function renderAll(state) {
   renderClassFilter(state);
   renderTeacherFilter(state);
   renderAvailabilityToggle(state);
   renderAbbreviateToggle(state);
+  renderAdjustToggle(state);
   renderAvailabilityList(state);
   renderPresetList(state);
   renderScheduledList(state);

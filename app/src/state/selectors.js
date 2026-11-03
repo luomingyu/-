@@ -80,6 +80,36 @@ export function getPresetForDate(state, dateStr) {
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
 }
 
+/** 「已排课表」条目归一化为「可调课对象」，字段与排课结果课程对齐（供调课/拖拽共用） */
+function normalizePresetItem(p) {
+  return {
+    sourceItemId: p.itemId,
+    name: p.courseName || '',
+    classType: p.classType,
+    teacher: p.teacher,
+    date: p.date,
+    startTime: p.startTime,
+    endTime: p.endTime,
+    type: 'preset'
+  };
+}
+
+/** 按 itemId 查找调课对象：优先排课结果课程，其次「已排课表」条目；找不到返回 null */
+export function findAdjustableCourse(state, itemId) {
+  const course = (state.courses || []).find(c => c.sourceItemId === itemId);
+  if (course) return course;
+  const preset = (state.presetData || []).find(p => p.itemId === itemId);
+  return preset ? normalizePresetItem(preset) : null;
+}
+
+/** 某日全部可调课对象（排课结果课程 +「已排课表」条目），按开始时间排序 */
+export function getAdjustableForDate(state, dateStr) {
+  return [
+    ...getCoursesForDate(state, dateStr),
+    ...getPresetForDate(state, dateStr).map(normalizePresetItem)
+  ].sort((a, b) => a.startTime.localeCompare(b.startTime));
+}
+
 /** 已排课表文件（按选中班级/师资多选过滤条目；过滤后无条目的文件不返回） */
 export function getFilteredPresetFiles(state) {
   const { selectedClasses, selectedTeachers } = state;

@@ -131,3 +131,19 @@ export const SUBJECT_CARD_CLASS_UNKNOWN = 'subject-unknown';
 export function getSubjectCardClass(teacher) {
   return SUBJECT_CARD_CLASS[getSubjectOfTeacher(teacher)] || SUBJECT_CARD_CLASS_UNKNOWN;
 }
+
+// 科目卡片底色（十六进制值，须与 calendar.css 中各 subject-* 的 --subject-bg-1 保持一致）。
+// 日历以 CSS 变量着色，飞书在线表格导出走接口无法读取 CSS，故此处维护同源色值供导出填色。
+export const SUBJECT_CARD_COLORS = {
+  英语: '#DCE6EB',
+  政治: '#E9DEDA',
+  数学: '#DFE6DB',
+  '408计算机': '#E2DEE9',
+  日语: '#E9E2D0'
+};
+export const SUBJECT_CARD_COLOR_UNKNOWN = '#E4E4E0';
+
+/** 由师资推断课程卡片底色；无法识别时返回中性灰兜底色（与日历卡片一致） */
+export function getSubjectCardColor(teacher) {
+  return SUBJECT_CARD_COLORS[getSubjectOfTeacher(teacher)] || SUBJECT_CARD_COLOR_UNKNOWN;
+}

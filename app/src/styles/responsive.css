@@ -10,7 +10,7 @@
 
   .main-split {
     flex-direction: column;
-    padding: 12px;
+    padding: 0 12px 12px;
   }
 
   .calendar-zone {
@@ -27,16 +27,12 @@
 }
 
 @media (max-width: 800px) {
-  .top-bar {
-    padding: 10px 14px;
-  }
-
   .app-title {
     font-size: 16px;
   }
 
   .main-split {
-    padding: 10px;
+    padding: 0 10px 10px;
     gap: 10px;
   }
 

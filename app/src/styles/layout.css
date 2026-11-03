@@ -1,4 +1,4 @@
-/* ===== 主布局：顶部条 + 左右 5:1 ===== */
+/* ===== 主布局：左右 5:1（日历标题行即页面顶端工具栏，无独立顶部条） ===== */
 .app-layout {
   display: flex;
   flex-direction: column;
@@ -6,36 +6,7 @@
   width: 100%;
 }
 
-/* 顶部条：横跨全宽 */
-.top-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-/* 右侧操作区：两行三列（列方向填充，v6.0.9）
-   第 1 列：排课 / 查看；第 2 列：空闲开关 / 班级缩写开关；第 3 列：生成图片 / 生成飞书表格 */
-.top-bar__actions {
-  display: grid;
-  grid-template-rows: repeat(2, auto);
-  grid-auto-flow: column;
-  gap: 8px 12px;
-  align-items: stretch;
-  justify-items: stretch;
-}
-
-/* 网格内按钮撑满单元格高度，与左侧操作分组对齐 */
-.top-bar__actions > .availability-toggle-btn,
-.top-bar__actions > .image-export-btn {
-  height: auto;
-  min-height: 40px;
-}
-
-/* 顶部操作分组：排课 / 查看 */
+/* 顶部操作分组：查看（班级 / 师资） */
 .action-group {
   display: flex;
   align-items: center;
@@ -53,12 +24,7 @@
   white-space: nowrap;
 }
 
-/* 年月选择器 */
-.month-selector {
-  display: flex;
-  gap: 8px;
-}
-
+/* 下拉选择器（调课对话框的开始时间） */
 .month-selector__select {
   padding: 8px 12px;
   border: 1px solid var(--border);
@@ -268,14 +234,7 @@
   cursor: progress;
 }
 
-/* 顶部条标题组：标题 + 使用说明链接 */
-.top-bar__title-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
+/* 标题行左区：标题 + 版本号 + 使用说明链接 */
 .app-title {
   font-size: 18px;
   font-weight: 700;
@@ -318,13 +277,13 @@
   color: #fff;
 }
 
-/* 主区：左右分栏 5:1 */
+/* 主区：左右分栏 5:1（顶部内边距为 0，日历标题行上贴页面顶端） */
 .main-split {
   display: flex;
   gap: 16px;
   flex: 1;
   min-height: 0;
-  padding: 16px;
+  padding: 0 16px 16px;
 }
 
 /* 左侧：日历区 */
@@ -354,4 +313,20 @@
   gap: 12px;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+/* 汇总面板顶部工具条：空闲开关 / 班级缩写开关 / 生成图片 / 生成飞书表格 */
+.summary-toolbar {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.summary-toolbar > .availability-toggle-btn,
+.summary-toolbar > .image-export-btn {
+  width: 100%;
+  justify-content: center;
+  padding: 8px 6px;
+  font-size: 12px;
 }

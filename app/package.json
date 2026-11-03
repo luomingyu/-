@@ -1,7 +1,7 @@
 {
   "name": "field-scheduling-app",
   "private": true,
-  "version": "6.1.0",
+  "version": "6.2.0",
   "type": "module",
   "scripts": {
     "gen-version": "node scripts/gen-version.mjs",

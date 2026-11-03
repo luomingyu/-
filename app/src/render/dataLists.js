@@ -216,7 +216,7 @@ export function renderStatus(state) {
   if (reportEl) {
     if (reports.length === 0) {
       reportEl.className = 'schedule-status info';
-      reportEl.textContent = '暂无排课报告，执行「智能排课」后自动生成';
+      reportEl.textContent = '暂无排课报告，执行「排课」后自动生成';
     } else {
       const latest = reports[reports.length - 1];
       let genText = '';

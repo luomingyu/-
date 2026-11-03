@@ -37,12 +37,12 @@ function buildExportContainer(state) {
   wrapper.style.top = '0';
 
   const header = document.createElement('div');
-  header.className = 'calendar-header';
+  header.className = 'calendar-export__header';
   const title = document.createElement('div');
-  title.className = 'calendar-title';
+  title.className = 'calendar-export__title';
   title.textContent = `${year}年${MONTHS[month]} 课表`;
   const subtitle = document.createElement('div');
-  subtitle.className = 'calendar-subtitle';
+  subtitle.className = 'calendar-export__subtitle';
   const classLabel = (state.selectedClasses && state.selectedClasses.length)
     ? state.selectedClasses.join('、') : '全部班级';
   const teacherLabel = (state.selectedTeachers && state.selectedTeachers.length)
@@ -65,7 +65,7 @@ function buildExportContainer(state) {
 
   const grid = document.createElement('div');
   grid.className = 'calendar-grid';
-  fillMonthGrid(grid, state);
+  fillMonthGrid(grid, state, { forExport: true });
 
   body.appendChild(weekdays);
   body.appendChild(grid);

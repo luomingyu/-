@@ -3,7 +3,7 @@ import { abbreviateClassType } from './classRegistry.js';
 
 /**
  * 导出排课结果为 Excel 文件
- * 格式：班级 | 课程名称 | 日期 | 授课时间（开始-结束） | 授课师资
+ * 格式对齐「已排课表」：班级 | 课节名称 | 师资 | 授课日期 | 授课时间（开始-结束）
  * @param {Array} courses 排课结果
  * @param {string} fileName 导出文件名
  * @param {boolean} [abbreviateClass=false] 是否将班级缩写为批量简称（v6.0.8）
@@ -15,13 +15,13 @@ export function exportScheduledToExcel(courses, fileName = '排课结果.xlsx', 
   }
 
   const aoa = [
-    ['班级', '课程名称', '日期', '授课时间', '授课师资'],
+    ['班级', '课节名称', '师资', '授课日期', '授课时间'],
     ...courses.map(c => [
       abbreviateClass ? abbreviateClassType(c.classType || '') : (c.classType || ''),
       c.name || '',
+      c.teacher || '',
       c.date || '',
-      `${c.startTime || ''} - ${c.endTime || ''}`,
-      c.teacher || ''
+      `${c.startTime || ''} - ${c.endTime || ''}`
     ])
   ];
 
@@ -30,14 +30,53 @@ export function exportScheduledToExcel(courses, fileName = '排课结果.xlsx', 
   // 设置列宽
   ws['!cols'] = [
     { wch: 12 },
+    { wch: 16 },
+    { wch: 12 },
     { wch: 14 },
-    { wch: 14 },
-    { wch: 18 },
-    { wch: 12 }
+    { wch: 18 }
   ];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '排课结果');
+  XLSX.writeFile(wb, fileName);
+}
+
+/**
+ * 导出「调课后变化课程」对比 Excel。
+ * 格式对齐「已排课表」：状态 | 班级 | 课节名称 | 师资 | 授课日期 | 授课时间
+ * 每门变化课程占两行（变化前 / 变化后），不同课程之间空一行隔开。
+ * @param {Array} changes 变化课程列表 [{classType, name, teacher, before:{date,startTime,endTime}, after:{...}}]
+ * @param {string} fileName 导出文件名
+ */
+export function exportAdjustDiffToExcel(changes, fileName = '调课变化.xlsx') {
+  if (!changes || changes.length === 0) {
+    alert('课程无变化');
+    return;
+  }
+
+  const timeRange = t => `${t.startTime || ''} - ${t.endTime || ''}`;
+  const aoa = [['状态', '班级', '课节名称', '师资', '授课日期', '授课时间']];
+  changes.forEach((c, idx) => {
+    aoa.push(['变化前', c.classType || '', c.name || '', c.teacher || '', c.before.date || '', timeRange(c.before)]);
+    aoa.push(['变化后', c.classType || '', c.name || '', c.teacher || '', c.after.date || '', timeRange(c.after)]);
+    // 不同课程之间空一行隔开
+    if (idx < changes.length - 1) aoa.push([]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  // 设置列宽
+  ws['!cols'] = [
+    { wch: 10 },
+    { wch: 12 },
+    { wch: 16 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 18 }
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '调课变化');
   XLSX.writeFile(wb, fileName);
 }
 

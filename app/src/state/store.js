@@ -19,6 +19,9 @@ const initialState = {
   selectedTeachers: [],       // 师资筛选（多选）：空数组=全部师资（v6.0.13）
   showAvailability: false,    // 日历是否显示空闲时间（默认隐藏，查看区按钮切换；v6.0.11 默认改为关）
   abbreviateClass: true,      // 班级是否缩写显示（默认缩写，查看区按钮切换；v6.0.8）
+  adjustMode: false,          // 调课模式（纯 UI 状态，不落盘）
+  selectedCourseId: null,     // 调课模式下选中的课程（= sourceItemId；纯 UI 状态，不落盘）
+  adjustDragging: false,      // 调课拖拽中（日历切换为 24 小时时间轴渲染；纯 UI 状态，不落盘）
   // 真实存储：按文件分组
   availabilityFiles: [],      // { id, fileName, uploadedAt, items: [{ itemId, teacher, date, startTime, endTime }] }
   courseSystemFiles: [],      // { id, fileName, uploadedAt, items: [{ itemId, classType, courseName, teacher, duration, scheduled }] }
@@ -124,6 +127,109 @@ export function toggleAbbreviateClass() {
   setState({ abbreviateClass: !state.abbreviateClass });
 }
 export function setUploadStatus(key, text, kind) { setStatus(key, text, kind); }
+
+// ============ 调课 Actions（纯 UI + 结果写回）============
+
+// 进入调课模式时的可调对象快照（纯内存，不落盘、不参与渲染，仅用于「调课完成」时对比变化）
+let adjustSnapshot = null;
+
+/** 汇总当前全部可调对象（排课结果课程 + 已排课表条目）的日期/时间属性，供变化对比 */
+function snapshotAdjustable() {
+  const fromCourses = state.courses.map(c => ({
+    key: c.sourceItemId,
+    classType: c.classType || '',
+    name: c.name || '',
+    teacher: c.teacher || '',
+    date: c.date || '',
+    startTime: c.startTime || '',
+    endTime: c.endTime || ''
+  }));
+  const fromPresets = (state.presetData || []).map(p => ({
+    key: p.itemId,
+    classType: p.classType || '',
+    name: p.courseName || '',
+    teacher: p.teacher || '',
+    date: p.date || '',
+    startTime: p.startTime || '',
+    endTime: p.endTime || ''
+  }));
+  return [...fromCourses, ...fromPresets];
+}
+
+/** 切换调课模式；进入时记录快照、退出时清空快照与选中课程（纯 UI 状态，不触发持久化） */
+export function toggleAdjustMode() {
+  const adjustMode = !state.adjustMode;
+  adjustSnapshot = adjustMode ? snapshotAdjustable() : null;
+  setState({ adjustMode, selectedCourseId: adjustMode ? state.selectedCourseId : null, adjustDragging: false });
+}
+
+/**
+ * 计算调课模式下发生变化的课程（对比进入调课模式时的快照）。
+ * 仅日期 / 开始时间 / 结束时间的改动视为变化（拖动只会改这三项）。
+ * @returns {Array<{classType,name,teacher,before:{date,startTime,endTime},after:{date,startTime,endTime}}>}
+ */
+export function getAdjustChanges() {
+  if (!adjustSnapshot) return [];
+  const beforeMap = new Map(adjustSnapshot.map(it => [it.key, it]));
+  const changes = [];
+  for (const cur of snapshotAdjustable()) {
+    const prev = beforeMap.get(cur.key);
+    if (!prev) continue;
+    if (prev.date === cur.date && prev.startTime === cur.startTime && prev.endTime === cur.endTime) continue;
+    changes.push({
+      classType: cur.classType,
+      name: cur.name,
+      teacher: cur.teacher,
+      before: { date: prev.date, startTime: prev.startTime, endTime: prev.endTime },
+      after: { date: cur.date, startTime: cur.startTime, endTime: cur.endTime }
+    });
+  }
+  return changes;
+}
+
+/** 调课模式下选中某门课程（入参为 sourceItemId；纯 UI 状态，不触发持久化） */
+export function selectCourseForAdjust(sourceItemId) {
+  setState({ selectedCourseId: sourceItemId });
+}
+
+/** 清空调课选中（纯 UI 状态，不触发持久化） */
+export function clearAdjustSelection() {
+  if (state.selectedCourseId == null) return;
+  setState({ selectedCourseId: null });
+}
+
+/** 标记是否正在拖动调课（驱动日历切换为时间轴渲染；纯 UI 状态，不触发持久化） */
+export function setAdjustDragging(flag) {
+  if (state.adjustDragging === !!flag) return;
+  setState({ adjustDragging: !!flag });
+}
+
+/**
+ * 把被调对象移动到新的日期 / 开始 / 结束时间。
+ * 写回目标按来源区分：排课结果课程 → state.courses；「已排课表」条目 → presetFiles（presetData 随之重新派生）。
+ */
+export function applyCourseMove(sourceItemId, date, startTime, endTime) {
+  const isScheduled = state.courses.some(c => c.sourceItemId === sourceItemId);
+  if (isScheduled) {
+    const courses = state.courses.map(c =>
+      c.sourceItemId === sourceItemId ? { ...c, date, startTime, endTime } : c
+    );
+    setState({ courses, selectedCourseId: null, adjustDragging: false });
+    return;
+  }
+  const presetFiles = state.presetFiles.map(f => ({
+    ...f,
+    items: f.items.map(it =>
+      it.itemId === sourceItemId ? { ...it, date, startTime, endTime } : it
+    )
+  }));
+  setState({
+    presetFiles,
+    presetData: rederivePreset(presetFiles),
+    selectedCourseId: null,
+    adjustDragging: false
+  });
+}
 
 // ============ 文件累积 Actions ============
 

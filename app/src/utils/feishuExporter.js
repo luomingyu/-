@@ -1,7 +1,7 @@
 // 飞书在线表格导出：把当前月历（含已排课程/预设课程）按日历形式输出到飞书表格
 // 布局：7 列星期表头；每月按周分块，每块高度=当周单日最多课程数（至少 1 行）；
 // 每列每天第一格是日期，其后每格是一节课（班级名称/课节名称/授课师资/授课时间）
-import { MONTHS, WEEKDAYS, WEEKDAYS_MON_FIRST } from '../config/constants.js';
+import { MONTHS, WEEKDAYS, WEEKDAYS_MON_FIRST, getSubjectCardColor } from '../config/constants.js';
 import { formatDate } from './dateUtils.js';
 import { getMonthDayData } from '../render/calendar.js';
 import { getCoursesForDate, getPresetForDate } from '../state/selectors.js';
@@ -147,6 +147,8 @@ function buildDayCourses(state, date) {
     className: state.abbreviateClass ? abbreviateClassType(course.classType || '') : (course.classType || ''),
     lessonName: course.name || '',
     teacher: course.teacher || '',
-    time: `${course.startTime || ''}-${course.endTime || ''}`
+    time: `${course.startTime || ''}-${course.endTime || ''}`,
+    // 底色与日历课程卡片一致：按授课师资推断科目配色，未收录师资用中性灰
+    color: getSubjectCardColor(course.teacher)
   }));
 }

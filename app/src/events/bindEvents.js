@@ -4,13 +4,18 @@ import {
   addAvailabilityFile, addCourseSystemFile, addPresetFile, setUploadStatus, runSchedule,
   deleteAvailabilityFile, deleteCourseSystemFile, deletePresetFile,
   deleteAvailabilityItem, deleteCourseSystemItem, deletePresetItem, deleteScheduledCourse,
-  toggleSection, toggleFile, setSelectedClasses, setSelectedTeachers, toggleShowAvailability, toggleAbbreviateClass
+  toggleSection, toggleFile, setSelectedClasses, setSelectedTeachers, toggleShowAvailability, toggleAbbreviateClass,
+  toggleAdjustMode, selectCourseForAdjust, applyCourseMove, setAdjustDragging, getAdjustChanges
 } from '../state/store.js';
 import { parseAvailabilitySheet, parseCourseSystemSheet, parsePresetSheet } from '../utils/excelParser.js';
-import { exportScheduledToExcel, exportAvailabilityToExcel } from '../utils/excelExporter.js';
+import { exportScheduledToExcel, exportAvailabilityToExcel, exportAdjustDiffToExcel } from '../utils/excelExporter.js';
 import { parseRequirements, generateAvailability } from '../utils/availabilityGenerator.js';
 import { exportCalendarImage } from '../utils/imageExporter.js';
 import { exportCalendarToFeishu, showFeishuNotice } from '../utils/feishuExporter.js';
+import { abbreviateClassType } from '../utils/classRegistry.js';
+import { timeToMinutes, minutesToTime } from '../utils/dateUtils.js';
+import { computeStartTimes, resolveCourseDuration } from '../utils/adjustRange.js';
+import { findAdjustableCourse } from '../state/selectors.js';
 
 // ============ 查看区多选筛选（班级/师资，v6.0.13） ============
 
@@ -156,7 +161,7 @@ export function bindEvents() {
       if (permission && permission.ok === false) {
         showFeishuNotice('info', `飞书表格已生成，但链接分享未开启（${permission.error}），他人可能无法打开：`, url);
       } else {
-        showFeishuNotice('success', '飞书表格已生成（组织内获得链接的人可阅读）：', url);
+        showFeishuNotice('success', '飞书表格已生成（组织内获得链接的人可编辑）：', url);
       }
       window.open(url, '_blank', 'noopener');
     } catch (error) {
@@ -288,6 +293,9 @@ export function bindEvents() {
     runSchedule();
   });
 
+  // 调课模式：按钮切换 + 课程拖拽 + 落点确认对话框
+  setupAdjustInteractions();
+
   // 导出排课结果（直接绑定，不受 stopPropagation 影响）
   document.getElementById('exportScheduledBtn')?.addEventListener('click', () => {
     const state = getState();
@@ -306,7 +314,7 @@ export function bindEvents() {
     const state = getState();
     const reports = state.scheduleReports || [];
     if (reports.length === 0) {
-      alert('暂无排课报告，请先执行「智能排课」');
+      alert('暂无排课报告，请先执行「排课」');
       return;
     }
     const latest = reports[reports.length - 1];
@@ -445,6 +453,447 @@ export function bindEvents() {
       }
     }
   });
+}
+
+// ============ 调课模式：按钮 / 拖拽 / 落点对话框 ============
+
+const ADJUST_DRAG_THRESHOLD = 4; // 拖动判定阈值（px）
+const ADJUST_SCROLL_EDGE = 80;   // 拖拽时距日历可视区上下边缘多少像素内触发自动滚动（热区）
+const ADJUST_SCROLL_MIN = 4;     // 刚进热区时每帧滚动像素（越深越快）
+const ADJUST_SCROLL_MAX = 24;    // 贴到边缘时每帧滚动像素
+
+let adjustDrag = null;    // 拖拽过程中的临时状态
+let adjustPending = null; // 对话框待确认的调课请求
+
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** 绑定调课模式的交互：按钮切换、课程拖拽、绿色段落点确认 */
+function setupAdjustInteractions() {
+  const adjustDialog = document.getElementById('adjustDialog');
+
+  // 调课按钮：进入调课模式 / 完成调课（完成时对比变化并按需导出变化课程 Excel）
+  document.getElementById('adjustBtn')?.addEventListener('click', () => {
+    closeAdjustDialog();
+    setAdjustDragging(false);
+
+    // 「调课完成」：先对比快照取变化课程，再退出模式（退出会清空快照）
+    if (getState().adjustMode) {
+      const changes = getAdjustChanges();
+      toggleAdjustMode();
+      if (changes.length === 0) {
+        alert('课程无变化');
+        return;
+      }
+      const now = new Date();
+      const stamp = `${now.getFullYear()}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(now.getDate()).padStart(2, '0')}日`;
+      exportAdjustDiffToExcel(changes, `调课变化_${stamp}.xlsx`);
+      return;
+    }
+
+    toggleAdjustMode();
+  });
+
+  // 日历网格：按下课程卡片 → 选中并准备拖拽
+  document.getElementById('calendarGrid')?.addEventListener('pointerdown', onAdjustPointerDown);
+
+  // 对话框：关闭 / 遮罩点击 / 完成
+  document.getElementById('adjustDialogClose')?.addEventListener('click', closeAdjustDialog);
+  adjustDialog?.addEventListener('click', (e) => {
+    if (e.target === adjustDialog) closeAdjustDialog();
+  });
+  document.getElementById('adjustDialogConfirm')?.addEventListener('click', confirmAdjustMove);
+  // 小时变更 → 重算该小时的合法分钟；分钟变更 → 仅刷新结束时间提示
+  document.getElementById('adjustDialogHour')?.addEventListener('change', () => {
+    renderAdjustMinuteOptions(document.getElementById('adjustDialogMinute')?.value);
+  });
+  document.getElementById('adjustDialogMinute')?.addEventListener('change', updateAdjustHint);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAdjustDialog();
+  });
+}
+
+function onAdjustPointerDown(e) {
+  const state = getState();
+  if (!state.adjustMode) return;
+  if (e.button != null && e.button !== 0) return;
+
+  const card = e.target.closest('.course-card--adjustable');
+  if (!card) return;
+  const sourceItemId = card.dataset.courseId;
+  if (!sourceItemId) return;
+
+  // 可拖拽对象 = 排课结果课程 或「已排课表」条目（二者 itemId 同源，统一按 sourceItemId 查找）
+  const course = findAdjustableCourse(state, sourceItemId);
+  if (!course) return;
+
+  e.preventDefault();
+  const rect = card.getBoundingClientRect();
+  // 记下该课程的日期单元格当前视口位置：重绘会新增绿色可调课时间段，日历会变高
+  const cellTop = card.closest('.day-cell')?.getBoundingClientRect().top ?? rect.top;
+
+  // 选中该课程（触发重绘：高亮关联课程 + 生成绿色可调课时间段）
+  selectCourseForAdjust(sourceItemId);
+
+  // 重绘后按单元格重新对齐，保证页面停留在该课程所在位置
+  alignAdjustCell(sourceItemId, cellTop);
+
+  adjustDrag = {
+    sourceItemId,
+    course,
+    anchorDate: course.date,
+    duration: resolveCourseDuration(state.courseSystemData, course),
+    startX: e.clientX,
+    startY: e.clientY,
+    lastX: e.clientX,
+    lastY: e.clientY,
+    offsetX: e.clientX - rect.left,
+    offsetY: e.clientY - rect.top,
+    width: rect.width,
+    started: false,
+    ghost: null,
+    hoverSeg: null,
+    scrollDir: 0,
+    scrollRaf: 0
+  };
+
+  document.addEventListener('pointermove', onAdjustPointerMove);
+  document.addEventListener('pointerup', onAdjustPointerUp);
+}
+
+/** 找到被调课程对应的卡片元素 */
+function findAdjustCard(sourceItemId) {
+  return Array.from(document.querySelectorAll('#calendarGrid .course-card'))
+    .find(el => el.dataset.courseId === sourceItemId) || null;
+}
+
+/**
+ * 解析「当前真正滚动的容器」。
+ * 宽屏（>1100px）：.calendar-body 自身滚动（overflow:auto 且被 flex 限高）；
+ * 窄屏（≤1100px）：body 高度 auto、日历不内部滚动（clientHeight == scrollHeight），
+ *   真实滚动发生在 window 上。此时写 .calendar-body.scrollTop 会被夹取为 0，
+ *   滚动补偿与自动滚动全部失效 → 进入拖拽态整月变高时页面直接跳走。
+ * 注意选择器限定在 .calendar-container 内：导出图片时会临时向 body 追加一个同名离屏容器。
+ */
+function scrollHost() {
+  const body = document.querySelector('.calendar-container .calendar-body');
+  if (body && body.scrollHeight - body.clientHeight > 1) {
+    return {
+      // 日历内部滚动：可视区即滚动区域本身，再与视口求交（窗口过矮时日历可能被裁切）
+      rect: () => visibleRect(body.getBoundingClientRect()),
+      readScroll: () => body.scrollTop,
+      scrollBy: (d) => { body.scrollTop += d; },
+      canScroll: () => body.scrollHeight - body.clientHeight > 1
+    };
+  }
+  return {
+    // window 滚动时以视口为热区基准（日历可能已被滚到视口上方/下方）
+    rect: () => visibleRect(body ? body.getBoundingClientRect() : { top: 0, bottom: window.innerHeight }),
+    readScroll: () => window.scrollY,
+    scrollBy: (d) => window.scrollBy(0, d),
+    canScroll: () => document.documentElement.scrollHeight - window.innerHeight > 1
+  };
+}
+
+/**
+ * 日历可视区：日历矩形 ∩ 视口。
+ * 热区只按纵向区间判定（横向不限），因此指针拖到右侧汇总面板上时依旧能继续自动滚动。
+ */
+function visibleRect(r) {
+  return { top: Math.max(r.top, 0), bottom: Math.min(r.bottom, window.innerHeight) };
+}
+
+/** 把元素拉回它原先的视口 top：按真实滚动体（内部滚动 / window 滚动）自动补偿 */
+function restoreViewportTop(el, prevTop) {
+  if (!el || prevTop == null) return;
+  scrollHost().scrollBy(el.getBoundingClientRect().top - prevTop);
+}
+
+/** 指针所在的日期格：优先 elementFromPoint，取不到时按矩形兜底 */
+function dayCellAt(clientX, clientY) {
+  const cell = document.elementFromPoint(clientX, clientY)?.closest('.day-cell');
+  if (cell) return cell;
+  for (const el of document.querySelectorAll('#calendarGrid .day-cell')) {
+    const r = el.getBoundingClientRect();
+    if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) return el;
+  }
+  return null;
+}
+
+/**
+ * 解析指针命中的绿色可调课时间段。
+ * hover 高亮与松手落点共用本函数 → 从构造上保证「命中 == 显示」。
+ * 先定位日期格，再在格内按矩形做纵向区间测试（不依赖直接命中绿段元素本身）。
+ */
+function resolveAdjustSegment(clientX, clientY) {
+  const cell = dayCellAt(clientX, clientY);
+  if (!cell) return null;
+  for (const el of cell.querySelectorAll('.adjust-segment')) {
+    const r = el.getBoundingClientRect();
+    if (clientY >= r.top && clientY <= r.bottom) return el;
+  }
+  return null;
+}
+
+/**
+ * 让被调课程所在的日期单元格回到指定的视口位置（prevTop）。
+ * 重绘 / 进入拖拽态都会改变日历高度，需按单元格重新对齐，页面才停留在该课程处。
+ */
+function alignAdjustCell(sourceItemId, prevTop) {
+  restoreViewportTop(findAdjustCard(sourceItemId)?.closest('.day-cell'), prevTop);
+}
+
+/** 按授课日期把对应的日期单元格拉回指定视口位置（拖拽起点锚定用） */
+function alignDayCell(dateStr, prevTop) {
+  restoreViewportTop(dayCellByDate(dateStr), prevTop);
+}
+
+/**
+ * 开始拖动时把「授课日期」格顶部的日期名称行滚到指针当前位置（行中心对齐指针）。
+ * 进入拖拽态后该日期格被渲染成 400px 高的 24 小时时间轴，指针屏幕位置不变：
+ * 若按日期格顶部对齐，指针会落到下一周同一列（如 12/18 → 12/25）；
+ * 以指针为锚后，指针始终停在原授课日期的名称行上，落点不会跑到别的日期。
+ */
+function scrollCellHeaderToPointer(dateStr, clientY) {
+  const header = dayCellByDate(dateStr)?.querySelector('.day-header');
+  if (!header) return;
+  const r = header.getBoundingClientRect();
+  scrollHost().scrollBy(r.top + r.height / 2 - clientY);
+}
+
+/** 按日期取当前渲染出的日期单元格 */
+function dayCellByDate(dateStr) {
+  return document.querySelector(`#calendarGrid .day-cell[data-date="${dateStr}"]`);
+}
+
+/** 高亮鼠标下的绿色可调课时间段 */
+function updateAdjustHover(clientX, clientY) {
+  if (!adjustDrag) return;
+  const seg = resolveAdjustSegment(clientX, clientY);
+  if (seg === adjustDrag.hoverSeg) return;
+  adjustDrag.hoverSeg?.classList.remove('hover');
+  seg?.classList.add('hover');
+  adjustDrag.hoverSeg = seg;
+}
+
+/** 拖到日历上下边缘热区时自动滚动；越靠近边缘越快 */
+function updateAdjustAutoScroll(clientX, clientY) {
+  const drag = adjustDrag;
+  if (!drag) return;
+  drag.lastX = clientX;
+  drag.lastY = clientY;
+
+  const host = scrollHost();
+  if (!host.canScroll()) {
+    drag.scrollDir = 0;
+    drag.scrollSpeed = 0;
+    return;
+  }
+
+  const rect = host.rect();
+  let dir = 0;
+  let depth = 0;
+  if (clientY < rect.top + ADJUST_SCROLL_EDGE) {
+    dir = -1;
+    depth = (rect.top + ADJUST_SCROLL_EDGE - clientY) / ADJUST_SCROLL_EDGE;
+  } else if (clientY > rect.bottom - ADJUST_SCROLL_EDGE) {
+    dir = 1;
+    depth = (clientY - (rect.bottom - ADJUST_SCROLL_EDGE)) / ADJUST_SCROLL_EDGE;
+  }
+  depth = Math.min(1, Math.max(0, depth)); // 越深越快
+  drag.scrollDir = depth > 0 ? dir : 0;
+  drag.scrollSpeed = ADJUST_SCROLL_MIN + (ADJUST_SCROLL_MAX - ADJUST_SCROLL_MIN) * depth;
+
+  if (drag.scrollDir !== 0 && !drag.scrollRaf) {
+    drag.scrollRaf = requestAnimationFrame(stepAdjustAutoScroll);
+  }
+}
+
+function stepAdjustAutoScroll() {
+  const drag = adjustDrag;
+  if (!drag || !drag.started || !drag.scrollDir) {
+    if (drag) drag.scrollRaf = 0;
+    return;
+  }
+  const host = scrollHost();
+  const before = host.readScroll();
+  host.scrollBy(drag.scrollDir * (drag.scrollSpeed || ADJUST_SCROLL_MIN));
+  // 已滚到顶/底则停止，避免空转
+  if (host.readScroll() === before) {
+    drag.scrollRaf = 0;
+    return;
+  }
+  drag.scrollRaf = requestAnimationFrame(stepAdjustAutoScroll);
+  updateAdjustHover(drag.lastX, drag.lastY);
+}
+
+function onAdjustPointerMove(e) {
+  if (!adjustDrag) return;
+  const dx = e.clientX - adjustDrag.startX;
+  const dy = e.clientY - adjustDrag.startY;
+  if (!adjustDrag.started && Math.hypot(dx, dy) < ADJUST_DRAG_THRESHOLD) return;
+
+  if (!adjustDrag.started) {
+    adjustDrag.started = true;
+    adjustDrag.ghost = createDragGhost(adjustDrag);
+    // 进入拖拽态会切换为 24 小时时间轴渲染、整月变高：
+    setAdjustDragging(true);
+    adjustDrag.hoverSeg = null; // 节点已被重绘替换
+    // 页面跳到该课程的授课日期：把该日期名称行滚到指针处（指针仍停在本课程原授课日期格内）
+    scrollCellHeaderToPointer(adjustDrag.anchorDate, e.clientY);
+    // 页面刚滚过 → 指针下的日期格/绿段已变，下面统一重算 hover，命中的是滚动后的实际落点。
+  }
+
+  adjustDrag.ghost.style.left = `${e.clientX - adjustDrag.offsetX}px`;
+  adjustDrag.ghost.style.top = `${e.clientY - adjustDrag.offsetY}px`;
+
+  updateAdjustHover(e.clientX, e.clientY);
+  updateAdjustAutoScroll(e.clientX, e.clientY);
+}
+
+function onAdjustPointerUp(e) {
+  document.removeEventListener('pointermove', onAdjustPointerMove);
+  document.removeEventListener('pointerup', onAdjustPointerUp);
+
+  const drag = adjustDrag;
+  adjustDrag = null;
+  if (!drag) return;
+
+  if (drag.scrollRaf) cancelAnimationFrame(drag.scrollRaf);
+  drag.ghost?.remove();
+  drag.hoverSeg?.classList.remove('hover');
+
+  if (!drag.started) return; // 纯点击 → 仅保持选中（页面已停在原处）
+
+  // 先取落点（此时绿色段仍在 DOM 中），再退出拖拽态恢复普通渲染。
+  // 与 hover 高亮共用 resolveAdjustSegment → 松手落点与高亮一致。
+  const seg = resolveAdjustSegment(e.clientX, e.clientY);
+  // 退出拖拽态会把整月从 400px 缩回原高度，同样需要滚动补偿，
+  // 否则释放瞬间页面再跳一次。锚定「落点所在日期格」，取不到时退回授课日期。
+  const dropDate = seg?.dataset.date || drag.anchorDate;
+  const cellTop = dayCellByDate(dropDate)?.getBoundingClientRect().top;
+  setAdjustDragging(false);
+  alignDayCell(dropDate, cellTop);
+  if (!seg) return;
+
+  openAdjustDialog(drag, seg);
+}
+
+/** 创建跟随鼠标的课程拖拽幽灵元素 */
+function createDragGhost(drag) {
+  const state = getState();
+  const course = drag.course;
+  const displayClass = state.abbreviateClass
+    ? abbreviateClassType(course.classType || '')
+    : (course.classType || '');
+
+  const ghost = document.createElement('div');
+  ghost.className = 'course-drag-ghost';
+  ghost.style.width = `${drag.width}px`;
+  ghost.innerHTML = `
+    ${displayClass ? `<div class="course-class">${escapeHtml(displayClass)}</div>` : ''}
+    <div class="course-name">${escapeHtml(course.name)}</div>
+    <div class="course-teacher">${escapeHtml(course.teacher || '')}</div>
+    <div class="course-time">${course.startTime} - ${course.endTime}</div>
+  `;
+  document.body.appendChild(ghost);
+  return ghost;
+}
+
+/** 打开调课确认对话框：日期只读 + 开始时间（小时/分钟两个下拉，仅列绿色段内合法值） + 完成按钮 */
+function openAdjustDialog(drag, segEl) {
+  const date = segEl.dataset.date;
+  const startTime = segEl.dataset.start;
+  const endTime = segEl.dataset.end;
+  // 绿色段内的全部合法开始时间（5 分钟刻度，且 开始时间 + 课时长 ≤ 段末）
+  const times = computeStartTimes({ startTime, endTime }, drag.duration);
+  if (times.length === 0) return;
+
+  // 该课程原时间若落在本段内则优先选中 —— 原时间点不得被删除
+  const originalStart = drag.course.startTime;
+  const preferred = times.includes(originalStart) ? originalStart : times[0];
+
+  adjustPending = {
+    sourceItemId: drag.sourceItemId,
+    date,
+    duration: drag.duration,
+    segment: { startTime, endTime },
+    originalStart,
+    legalTimes: times
+  };
+
+  const dateEl = document.getElementById('adjustDialogDate');
+  if (dateEl) dateEl.textContent = date;
+  renderAdjustHourOptions(preferred);
+
+  document.getElementById('adjustDialog')?.classList.remove('hidden');
+}
+
+/** 某小时内全部合法开始分钟（两位字符串数组） */
+function adjustMinutesForHour(hour) {
+  return (adjustPending?.legalTimes || [])
+    .filter(t => t.slice(0, 2) === hour)
+    .map(t => t.slice(3, 5));
+}
+
+/** 填充「小时」下拉并联动「分钟」下拉；preferred 形如 'HH:MM' */
+function renderAdjustHourOptions(preferred) {
+  const hourEl = document.getElementById('adjustDialogHour');
+  if (!hourEl || !adjustPending) return;
+  const hours = [...new Set(adjustPending.legalTimes.map(t => t.slice(0, 2)))];
+  hourEl.innerHTML = hours.map(h => `<option value="${h}">${h}</option>`).join('');
+  hourEl.value = preferred.slice(0, 2);
+  renderAdjustMinuteOptions(preferred.slice(3, 5));
+}
+
+/** 按当前小时填充「分钟」下拉（只列合法值）；preferMin 合法则保留，否则取该小时第一个 */
+function renderAdjustMinuteOptions(preferMin) {
+  const minuteEl = document.getElementById('adjustDialogMinute');
+  const hourEl = document.getElementById('adjustDialogHour');
+  if (!minuteEl || !hourEl) return;
+  const mins = adjustMinutesForHour(hourEl.value);
+  minuteEl.innerHTML = mins.map(m => `<option value="${m}">${m}</option>`).join('');
+  minuteEl.value = mins.includes(preferMin) ? preferMin : (mins[0] || '');
+  updateAdjustHint();
+}
+
+/** 读取「小时 + 分钟」组合出的开始时间（'HH:MM'） */
+function readAdjustStartTime() {
+  const hour = document.getElementById('adjustDialogHour')?.value;
+  const minute = document.getElementById('adjustDialogMinute')?.value;
+  if (!hour || minute == null || minute === '') return null;
+  return `${hour}:${minute}`;
+}
+
+/** 刷新提示：课时长 · 绿色时间段 · 结束时间（原时间额外标注） */
+function updateAdjustHint() {
+  const hintEl = document.getElementById('adjustDialogHint');
+  const startTime = readAdjustStartTime();
+  if (!hintEl || !startTime || !adjustPending) return;
+  const endTime = minutesToTime(timeToMinutes(startTime) + adjustPending.duration);
+  const { segment, duration, originalStart } = adjustPending;
+  const tag = startTime === originalStart ? '（原时间）' : '';
+  hintEl.textContent = `课程时长 ${duration} 分钟 · 绿色时间段 ${segment.startTime} - ${segment.endTime} · 结束时间 ${endTime}${tag}`;
+}
+
+/** 确认调课：按所选开始时间写回排课结果 */
+function confirmAdjustMove() {
+  if (!adjustPending) return;
+  const startTime = readAdjustStartTime();
+  if (!startTime) return;
+  const endTime = minutesToTime(timeToMinutes(startTime) + adjustPending.duration);
+  applyCourseMove(adjustPending.sourceItemId, adjustPending.date, startTime, endTime);
+  closeAdjustDialog();
+}
+
+function closeAdjustDialog() {
+  adjustPending = null;
+  document.getElementById('adjustDialog')?.classList.add('hidden');
 }
 
 // ============ 年月选择器 ============
